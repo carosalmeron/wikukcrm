@@ -4907,173 +4907,33 @@ function App(){
   const [section,setSection]=useState("dashboard");
   const [nominasSubidas,setNominasSubidas]=useState({});
   const [clientesDB,setClientesDB]=useState(CLIENTES);
-  const [storageReady,setStorageReady]=useState(false);
 
-  // ── Datos persistentes via window.storage ──
-  const [incidencias,setIncidencias]=useState(INITIAL_INC);
-  const [_incInit,set_incInit]=useState(false);
-  const [objetivosDB,setObjetivosDB]=useState(()=>{
-    // Objetivos por vendedor y semana: {[uid]: [{semana,ventas,mb,muestras,promo,liq}]}
-    const semanas=[2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26];
-    const obj={};
-    VENDEDORES.filter(v=>v.rol==="agente").forEach(v=>{
-      const base=v.equipo==="INTERKEY"
-        ?{ventas:100000,mb:27,muestras:20,promo:5000,liq:3000}
-        :{ventas:75000,mb:32,muestras:55,promo:3000,liq:2000};
-      obj[v.id]=semanas.map(s=>({semana:s,...base}));
-    });
-    return obj;
-  });
-  const [historialDB,setHistorialDB]=useState([]);
-  const [reportesSem,setReportesSem]=useState([
-    // ── Semana 15 — wk1 ──
-    {agente:"wk1",semana:15,enviado:true,ts:"14/04/2026",visitas:[
-      {clienteId:"C0101",clienteNombre:"MARIANO CAMPOS PEREZ",resultado:"nuevo_pedido",
-       notas:"Visita muy positiva. Cerrado pedido de 150kg Pimentón Dulce 140 Astas y 80kg Pimienta Negra Molida. Está muy contento con la calidad. Me pide que le presente la gama CTH en la próxima visita."},
-      {clienteId:"C0102",clienteNombre:"INDUSTRIAS CARNICAS DE MONACHIL S.L.",resultado:"visitado",
-       notas:"Reunión con el responsable de compras. Interesado en Ajo Granulado China formato 25KG. Dice que si el precio cuadra hace pedido la semana que viene. Quedamos el jueves."},
-      {clienteId:"C0103",clienteNombre:"JORGE LOPEZ MORON",resultado:"llamada",
-       notas:"Llamada para confirmar recepción del pedido. Conforme con todo. Pregunta por disponibilidad del Pimentón Ahumado para su chorizo especial de verano."},
-    ],muestras:[],recuperaciones:[],clientes:[]},
-    // ── Semana 14 — wk1 ──
-    {agente:"wk1",semana:14,enviado:true,ts:"07/04/2026",visitas:[
-      {clienteId:"C0101",clienteNombre:"MARIANO CAMPOS PEREZ",resultado:"visitado",
-       notas:"Segunda visita del mes. Revisamos consumo del trimestre. Está rotando muy bien el Ajo Deshidratado de la muestra S12. Preparando presupuesto para pedido mensual."},
-      {clienteId:"C0102",clienteNombre:"INDUSTRIAS CARNICAS DE MONACHIL S.L.",resultado:"no_disponible",
-       notas:"El director estaba en feria del sector. Dejé catálogo y tarjeta con la recepcionista. Vuelvo la próxima semana."},
-      {clienteId:"C0103",clienteNombre:"JORGE LOPEZ MORON",resultado:"visitado",
-       notas:"Presenté la nueva gama de Tripas Naturales. Muy interesado en tripa de cordero para su producto estrella. Le dejé muestras formato B.100M. Hace prueba esta semana."},
-    ],muestras:[],recuperaciones:[],clientes:[]},
-    // ── Semana 13 — wk1 ──
-    {agente:"wk1",semana:13,enviado:true,ts:"31/03/2026",visitas:[
-      {clienteId:"C0101",clienteNombre:"MARIANO CAMPOS PEREZ",resultado:"llamada",
-       notas:"Llamada de seguimiento. Confirma que la muestra de Ajo Deshidratado ha funcionado muy bien en su obrador. Quiere ampliar a formato 25KG. Le envío oferta por email."},
-      {clienteId:"C0102",clienteNombre:"INDUSTRIAS CARNICAS DE MONACHIL S.L.",resultado:"visitado",
-       notas:"Primera reunión seria con el nuevo responsable de compras. Buena actitud. Me pidió comparativa de precios vs su proveedor actual. Le paso propuesta en 48h."},
-      {clienteId:"C0103",clienteNombre:"JORGE LOPEZ MORON",resultado:"no_compra",
-       notas:"No quiso avanzar por ahora. Tiene stock hasta verano y su proveedor actual le ha bajado precio. Vuelvo en junio con nueva oferta."},
-    ],muestras:[],recuperaciones:[],clientes:[]},
-    // ── Semana 12 — wk1 ──
-    {agente:"wk1",semana:12,enviado:true,ts:"24/03/2026",visitas:[
-      {clienteId:"C0101",clienteNombre:"MARIANO CAMPOS PEREZ",resultado:"visitado",
-       notas:"Primera visita del año. Cliente nuevo captado por referencia. Obrador mediano con producción propia de embutidos. Le presenté la gama básica de especias. Muy receptivo."},
-      {clienteId:"C0103",clienteNombre:"JORGE LOPEZ MORON",resultado:"nuevo_pedido",
-       notas:"¡Gran visita! Primer pedido: 50kg Pimentón Dulce + 25kg Pimienta Negra. Habla muy bien de la calidad. Potencial para ser cliente A."},
-    ],muestras:[],recuperaciones:[],clientes:[]},
-    // ── Semana 15 — ik1 ──
-    {agente:"ik1",semana:15,enviado:true,ts:"14/04/2026",visitas:[
-      {clienteId:"C0001",clienteNombre:"CARLOS MORENO CONTRERAS",resultado:"nuevo_pedido",
-       notas:"Pedido de 300kg especias mixtas para elaboración chorizo ibérico temporada verano. Muy satisfecho con el servicio y la calidad. Habla de ampliar con la gama CTH."},
-      {clienteId:"C0002",clienteNombre:"GABRIEL CASTAÑO, S.L.",resultado:"visitado",
-       notas:"Visita de mantenimiento. Consumo Q1 correcto. Comenta que abre nueva línea de producción en septiembre y necesitará más volumen. Gran oportunidad."},
-      {clienteId:"C0003",clienteNombre:"JAMON Y SALUD SA",resultado:"llamada",
-       notas:"Confirmada entrega semana pasada. Sin incidencias. Pregunta disponibilidad Pimentón de La Vera. Confirmo con almacén."},
-    ],muestras:[],recuperaciones:[],clientes:[]},
-    // ── Semana 14 — ik1 ──
-    {agente:"ik1",semana:14,enviado:true,ts:"07/04/2026",visitas:[
-      {clienteId:"C0001",clienteNombre:"CARLOS MORENO CONTRERAS",resultado:"visitado",
-       notas:"Revisión trimestral. Consumo estable, muy satisfecho. Pide aviso cuando llegue nuevo lote Pimentón Ahumado D.O. Le pongo en lista de espera."},
-      {clienteId:"C0002",clienteNombre:"GABRIEL CASTAÑO, S.L.",resultado:"no_disponible",
-       notas:"Fábrica cerrada por inventario anual. Dejo nota y llamo la semana que viene."},
-    ],muestras:[],recuperaciones:[],clientes:[]},
-    // ── Semana 13 — ik1 ──
-    {agente:"ik1",semana:13,enviado:true,ts:"31/03/2026",visitas:[
-      {clienteId:"C0001",clienteNombre:"CARLOS MORENO CONTRERAS",resultado:"visitado",
-       notas:"Segunda visita del mes. Le presento el nuevo catálogo deshidratadas. Muy interesado en el formato granel para reducir costes. Solicita muestra Ajo Granulado 25KG."},
-      {clienteId:"C0003",clienteNombre:"JAMON Y SALUD SA",resultado:"nuevo_pedido",
-       notas:"Pedido de renovación mensual: 120kg Pimienta Negra Molida + 60kg Pimentón Dulce. Cliente fidelizado desde hace 3 años. Sin incidencias."},
-    ],muestras:[],recuperaciones:[],clientes:[]},
-    // ── Semana 15 — wk2 ──
-    {agente:"wk2",semana:15,enviado:true,ts:"14/04/2026",visitas:[
-      {clienteId:"C0126",clienteNombre:"FRANCISCO J. TORNAY VIÑAS",resultado:"visitado",
-       notas:"Presentación nuevos formatos B.5KG especias. Interesado en Pimentón Dulce para reducir costes de embalaje. Hace pedido de prueba de 10 bolsas."},
-      {clienteId:"C0127",clienteNombre:"CARNES ORPRI SLU",resultado:"nuevo_pedido",
-       notas:"Renovación contrato anual. Pedido marco por 2.000kg de especias distribuido en 12 entregas. Gran cliente consolidado."},
-      {clienteId:"C0128",clienteNombre:"FAMILIA PIERNAS SL",resultado:"no_compra",
-       notas:"Evalúan cambiar a condimentos preelaborados. Vuelvo en 3 semanas con propuesta de valor actualizada y comparativa de costes."},
-    ],muestras:[],recuperaciones:[],clientes:[]},
-  ]);
-  const saveReporte=(rep)=>{
-    // When saving, add new muestras to the global pending registry
-    setMuestrasPendientes(prev=>{
-      const nuevas=(rep.muestras||[]).filter(m=>!prev.find(p=>p.id===m.id));
-      const updated=prev.map(p=>{ const fb=rep.feedbackMuestras?.find(f=>f.id===p.id); return fb?{...p,...fb}:p; });
-      return [...updated,...nuevas.map(m=>({...m,agente:rep.agente,estado:"pendiente"}))];
-    });
-    setReportesSem(p=>[rep,...p.filter(r=>!(r.agente===rep.agente&&r.semana===rep.semana))]);
-  };
-  const [muestrasPendientes,setMuestrasPendientes]=useState([
-    {id:"mp1",prodCodigo:"500120",prodNombre:"Burger Meet Clásico B.5KG",tipo:"Ingredientes",cantidad:3,clienteNombre:"CARLOS MORENO CONTRERAS",agente:"ik1",semana:11,estado:"pendiente",nota:""},
-    {id:"mp5",prodCodigo:"500445",prodNombre:"Especias Pollo a l'Ast B.1KG",tipo:"Ingredientes",cantidad:2,clienteNombre:"EMBUTIDOS MORATO SL",agente:"ik2",semana:11,estado:"pendiente",nota:""},
-    {id:"mp9",prodCodigo:"WE0091.1",prodNombre:"Pimentón Ahumado B.1KG",tipo:"Ingredientes",cantidad:3,clienteNombre:"HERMANOS GARCIA MIGUEL S.L",agente:"ik3",semana:14,estado:"pendiente",nota:""},
-    {id:"mp13",prodCodigo:"500120",prodNombre:"Burger Meet Clásico B.5KG",tipo:"Ingredientes",cantidad:4,clienteNombre:"EMBUTIDOS DEL DUERO S.L.L",agente:"ik4",semana:13,estado:"pendiente",nota:""},
-    {id:"mp17",prodCodigo:"500445",prodNombre:"Especias Pollo a l'Ast B.1KG",tipo:"Ingredientes",cantidad:1,clienteNombre:"INDUSTRIAS CARNICAS DE MONACHIL S.L.",agente:"wk1",semana:12,estado:"pendiente",nota:""},
-    {id:"mp21",prodCodigo:"WE0091.1",prodNombre:"Pimentón Ahumado B.1KG",tipo:"Ingredientes",cantidad:5,clienteNombre:"PRODUCTOS CARNICOS CERMUR S.L.",agente:"wk2",semana:13,estado:"ko",nota:"Demasiado especiado para su clientela."},
-    {id:"mp25",prodCodigo:"500120",prodNombre:"Burger Meet Clásico B.5KG",tipo:"Ingredientes",cantidad:3,clienteNombre:"CARNICERÍA HERMANOS CORRALES S.L.",agente:"wk3",semana:12,estado:"pendiente",nota:""},
-    {id:"mp29",prodCodigo:"500445",prodNombre:"Especias Pollo a l'Ast B.1KG",tipo:"Ingredientes",cantidad:2,clienteNombre:"EMBUTIDOS LA SERRANA S.L.",agente:"wk4",semana:13,estado:"pendiente",nota:""},
-    {id:"mp33",prodCodigo:"WE0091.1",prodNombre:"Pimentón Ahumado B.1KG",tipo:"Ingredientes",cantidad:2,clienteNombre:"HERMANOS GRANADOS MORENO",agente:"wk5",semana:11,estado:"pendiente",nota:""},
-    {id:"mp37",prodCodigo:"500120",prodNombre:"Burger Meet Clásico B.5KG",tipo:"Ingredientes",cantidad:5,clienteNombre:"PRODUCTOS EL PEÑEDO S.L.",agente:"wk6",semana:11,estado:"ko",nota:"Demasiado especiado para su clientela."},
-    {id:"mp41",prodCodigo:"500445",prodNombre:"Especias Pollo a l'Ast B.1KG",tipo:"Ingredientes",cantidad:3,clienteNombre:"BARBELA CARNES S.L.",agente:"wk7",semana:12,estado:"pedido",nota:"Ha pedido 5 cajas de inmediato."},
-    {id:"mp45",prodCodigo:"WE0091.1",prodNombre:"Pimentón Ahumado B.1KG",tipo:"Ingredientes",cantidad:2,clienteNombre:"CARNICAS CRUZ S.L.",agente:"wk8",semana:13,estado:"pendiente",nota:""},
-    {id:"mp49",prodCodigo:"500120",prodNombre:"Burger Meet Clásico B.5KG",tipo:"Ingredientes",cantidad:3,clienteNombre:"GARCIA CARNES S.L.",agente:"wk9",semana:14,estado:"pedido",nota:"Pedido de 10 unidades. Gran éxito."},
-    {id:"mp53",prodCodigo:"500445",prodNombre:"Especias Pollo a l'Ast B.1KG",tipo:"Ingredientes",cantidad:1,clienteNombre:"JESUS CARNES S.L.",agente:"wk10",semana:12,estado:"pendiente",nota:""},
-    {id:"mp57",prodCodigo:"WE0091.1",prodNombre:"Pimentón Ahumado B.1KG",tipo:"Ingredientes",cantidad:3,clienteNombre:"PEPE CARNES S.L.",agente:"wk11",semana:11,estado:"pendiente",nota:""},
-    {id:"mp61",prodCodigo:"500120",prodNombre:"Burger Meet Clásico B.5KG",tipo:"Ingredientes",cantidad:1,clienteNombre:"PIEDRA CARNES S.L.",agente:"wk12",semana:14,estado:"positivo",nota:"Muy buena textura. Interesado en pedido regular."},
-    {id:"mp65",prodCodigo:"500445",prodNombre:"Especias Pollo a l'Ast B.1KG",tipo:"Ingredientes",cantidad:2,clienteNombre:"MIGUEL CARNES S.L.",agente:"wk13",semana:13,estado:"pendiente",nota:""},
-    {id:"mp69",prodCodigo:"WE0091.1",prodNombre:"Pimentón Ahumado B.1KG",tipo:"Ingredientes",cantidad:4,clienteNombre:"JULIA CARNES S.L.",agente:"wk14",semana:12,estado:"pendiente",nota:""},
-    {id:"mp73",prodCodigo:"500120",prodNombre:"Burger Meet Clásico B.5KG",tipo:"Ingredientes",cantidad:2,clienteNombre:"ZAFRA CARNES S.L.",agente:"wk15",semana:12,estado:"positivo",nota:"Le encanta. Va a pedir la semana que viene."}
-  ]);
-  const [recuperaciones,setRecuperaciones]=useState([
-  {id:"r1",clienteNombre:"CARNICERÍA HERMANOS CORRALES S.L.",agente:"wk1",equipo:"WIKUK",tipo:"recuperacion",objetivo:"Cliente inactivo 4 meses. Último pedido S12. Propongo visita con oferta especial Burger Meet -10%.",semanaInicio:15,estado:"pend_aprobacion",solicitadoPor:"wk1",ofertas:[{prodNombre:"Burger Meet Clásico B.5KG",precioBase:4.20,dto:10,precioFinal:3.78}],seguimientos:[]}
-]);
-
-  // ── Cargar datos persistentes al iniciar ──
-  const STORAGE_VERSION = "v3-sim";
+  // ── Datos persistentes via localStorage ──
   useEffect(()=>{
-    const load = async () => {
-      try {
-        const ver = await window.storage.get('crm_version').catch(()=>null);
-        if(ver?.value !== STORAGE_VERSION){
-          // Nueva versión — resetear storage y usar datos de simulación
-          await window.storage.set('crm_version', STORAGE_VERSION).catch(()=>{});
-          await window.storage.set('crm_recuperaciones','[]').catch(()=>{});
-          await window.storage.set('crm_muestras','[]').catch(()=>{});
-          await window.storage.set('crm_incidencias','[]').catch(()=>{});
-          setStorageReady(true);
-          return;
-        }
-        // Misma versión — cargar datos guardados si hay contenido
-        const [r1,r2,r3] = await Promise.all([
-          window.storage.get('crm_recuperaciones').catch(()=>null),
-          window.storage.get('crm_muestras').catch(()=>null),
-          window.storage.get('crm_incidencias').catch(()=>null),
-        ]);
-        if(r1?.value){ const d=JSON.parse(r1.value); if(Array.isArray(d)&&d.length>0) setRecuperaciones(d); }
-        if(r2?.value){ const d=JSON.parse(r2.value); if(Array.isArray(d)&&d.length>0) setMuestrasPendientes(d); }
-        if(r3?.value){ const d=JSON.parse(r3.value); if(Array.isArray(d)&&d.length>0) setIncidencias(d); }
-      } catch(e){ console.log('Storage load error:', e); }
-      setStorageReady(true);
-    };
-    load();
+    try {
+      const rec = localStorage.getItem('crm_recuperaciones');
+      const mue = localStorage.getItem('crm_muestras');
+      const inc = localStorage.getItem('crm_incidencias');
+      if(rec) setRecuperaciones(JSON.parse(rec));
+      if(mue) setMuestrasPendientes(JSON.parse(mue));
+      if(inc) setIncidencias(JSON.parse(inc));
+    } catch(e){}
   },[]);
 
   // ── Guardar recuperaciones ──
   useEffect(()=>{
-    if(!storageReady) return;
-    window.storage.set('crm_recuperaciones', JSON.stringify(recuperaciones)).catch(()=>{});
-  },[recuperaciones, storageReady]);
+    try{localStorage.setItem('crm_recuperaciones',JSON.stringify(recuperaciones));}catch(e){}
+  },[recuperaciones]);
 
   // ── Guardar muestras ──
   useEffect(()=>{
-    if(!storageReady) return;
-    window.storage.set('crm_muestras', JSON.stringify(muestrasPendientes)).catch(()=>{});
-  },[muestrasPendientes, storageReady]);
+    try{localStorage.setItem('crm_muestras',JSON.stringify(muestrasPendientes));}catch(e){}
+  },[muestrasPendientes]);
 
   // ── Guardar incidencias ──
   useEffect(()=>{
-    if(!storageReady) return;
-    window.storage.set('crm_incidencias', JSON.stringify(incidencias)).catch(()=>{});
-  },[incidencias, storageReady]);
+    try{localStorage.setItem('crm_incidencias',JSON.stringify(incidencias));}catch(e){}
+  },[incidencias]);
 
   const handleLogin=(user)=>{
     setSession(user);
