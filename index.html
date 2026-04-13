@@ -28,7 +28,7 @@
     });
     const db=firebase.firestore();
     window.fbGuardar=async(col,id,datos)=>{try{await db.collection(col).doc(String(id)).set(datos,{merge:true});return true;}catch(e){return false;}};
-    window.fbObtener=async(col,filtros)=>{try{let q=db.collection(col);const snap=await q.get();return snap.docs.map(d=>({id:d.id,...d.data()}));}catch(e){return[];}};
+    window.fbObtener=async(col)=>{try{const snap=await db.collection(col).get();return snap.docs.map(d=>({id:d.id,...d.data()}));}catch(e){return[];}};
     console.log('Firebase OK');
   </script>
   <script src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
@@ -3388,18 +3388,22 @@ function LoginScreen({onLogin}){
   const handleSubmit=()=>{
     if(!user.trim()||!pass.trim()){setError("Introduce usuario y contraseña");return;}
     setLoading(true);setError("");
-    setTimeout(()=>{
-      // Buscar en USERS_INITIAL
-      const found=USERS_INITIAL.find(u=>
-        u.username?.toLowerCase()===user.trim().toLowerCase() && u.password===pass.trim()
+    const tryLogin=(usersList)=>{
+      const found=usersList.find(u=>
+        u.username?.toLowerCase()===user.trim().toLowerCase() && u.password===pass.trim() && u.activo!==false
       );
-      if(found){
-        onLogin(found);
-      } else {
-        setError("Usuario o contraseña incorrectos");
-        setLoading(false);
-      }
-    },400);
+      if(found){ onLogin(found); }
+      else { setError("Usuario o contraseña incorrectos"); setLoading(false); }
+    };
+    // Intentar desde Firebase primero
+    if(window.fbObtener){
+      window.fbObtener('usuarios').then(data=>{
+        if(data&&data.length>0) tryLogin(data);
+        else tryLogin(USERS_INITIAL);
+      }).catch(()=>tryLogin(USERS_INITIAL));
+    } else {
+      setTimeout(()=>tryLogin(USERS_INITIAL),400);
+    }
   };
 
   const BG="#EFEDE8";
@@ -5154,14 +5158,24 @@ function AdminUsers({users, onUpdate}){
     if(!form.nombre.trim()||!form.username.trim())return;
     const id=isNew?`u-${Date.now()}`:editUser.id;
     const pwd=form.password.trim()||editUser?.password||"";
-    onUpdate(users.filter(u=>u.id!==id).concat([{...form,id,password:pwd}]));
+    const userDoc={...form,id,password:pwd};
+    // Guardar en Firebase
+    if(window.fbGuardar) window.fbGuardar('usuarios',id,userDoc);
+    onUpdate(users.filter(u=>u.id!==id).concat([userDoc]));
     setEditUser(null);
   };
   const eliminar=(id)=>{
+    // Desactivar en Firebase en lugar de eliminar (más seguro)
+    if(window.fbGuardar) window.fbGuardar('usuarios',id,{activo:false});
     onUpdate(users.filter(u=>u.id!==id));
     setConfirm(null);
   };
-  const toggleActivo=(id)=>onUpdate(users.map(u=>u.id===id?{...u,activo:!u.activo}:u));
+  const toggleActivo=(id)=>{
+    const updated=users.map(u=>u.id===id?{...u,activo:!u.activo}:u);
+    const u=updated.find(x=>x.id===id);
+    if(window.fbGuardar&&u) window.fbGuardar('usuarios',id,{activo:u.activo});
+    onUpdate(updated);
+  };
 
   // ── FORMULARIO EDITAR / NUEVO ──────────────────────────────────
   if(editUser!==null){
@@ -7278,6 +7292,14 @@ function ModeSelector({session, onSelect, onLogout}){
 
 function App(){
   const [users,setUsers]=useState(USERS_INITIAL);
+
+  // Cargar usuarios desde Firebase
+  useEffect(()=>{
+    if(!window.fbObtener) return;
+    window.fbObtener('usuarios').then(data=>{
+      if(data&&data.length>0) setUsers(data);
+    }).catch(()=>{});
+  },[]);
   const [session,setSession]=useState(null);
   const [modo,setModo]=useState(null); // null=selector | "crm" | "catalogo"
   const [section,setSection]=useState("dashboard");
