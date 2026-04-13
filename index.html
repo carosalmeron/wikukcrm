@@ -4971,10 +4971,6 @@ function App(){
     });
     setReportesSem(p=>[rep,...p.filter(r=>!(r.agente===rep.agente&&r.semana===rep.semana))]);
   };
-  const addInc=i=>setIncidencias(p=>[i,...p]);
-  const updInc=i=>setIncidencias(p=>p.map(x=>x.id===i.id?i:x));
-  const addRec=r=>setRecuperaciones(p=>[r,...p]);
-  const updRec=r=>setRecuperaciones(p=>p.map(x=>x.id===r.id?r:x));
 
   const handleLogin=(user)=>{
     setSession(user);
