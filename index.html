@@ -28,7 +28,7 @@
     });
     const db=firebase.firestore();
     window.fbGuardar=async(col,id,datos)=>{try{await db.collection(col).doc(String(id)).set(datos,{merge:true});return true;}catch(e){return false;}};
-    window.fbObtener=async(col,filtros)=>{try{let q=db.collection(col);if(filtros)filtros.forEach(f=>q=q.where(f[0],f[1],f[2]));const snap=await q.get();return snap.docs.map(d=>({id:d.id,...d.data()}));}catch(e){return[];}};
+    window.fbObtener=async(col,filtros)=>{try{let q=db.collection(col);const snap=await q.get();return snap.docs.map(d=>({id:d.id,...d.data()}));}catch(e){return[];}};
     console.log('Firebase OK');
   </script>
   <script src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
@@ -300,13 +300,25 @@ const ESTADOS_INC={
   resuelta:    {label:"Resuelta",    color:C.green, bg:C.greenL,  dot:"✅"},
   sin_solucion:{label:"Sin solución",color:C.muted, bg:C.bg,      dot:"⚫"},
 };
+// Departamentos que pueden recibir escalados de incidencias
+const DEPARTAMENTOS=[
+  {k:"logistica",  label:"Logística",      icon:"🚚", color:"#0891B2"},
+  {k:"compras",    label:"Compras",         icon:"🛒", color:"#7C3AED"},
+  {k:"finanzas",   label:"Finanzas",        icon:"💰", color:"#059669"},
+  {k:"administracion",label:"Administración",icon:"📋", color:"#1A5FD4"},
+  {k:"id",         label:"I+D",             icon:"🔬", color:"#D97706"},
+];
+// Config de responsables por dpto (se carga desde Firebase config/responsables)
+// Estructura: {logistica:"uid1", compras:"uid2", ...}
+let RESP_CONFIG_GLOBAL={};
+const getRespDpto=(dpto)=>RESP_CONFIG_GLOBAL[dpto]||null;
 const MOTIVOS_NO=["No gusta","Precio","No cambia","Falta sabor","Resistencia","Apelmaza","Color insuf.","Calibre inadecuado","Otro"];
 
 let NEXT_INC_ID=20;
 const INITIAL_INC=[
-  {id:1,titulo:"Embutidos Monachil — producto defectuoso",desc:"El cliente recibió 3 cajas de Burger Meet con mal olor. Dice que lleva pasando 2 semanas y está pensando en cambiar de proveedor.",agenteId:"wk1",equipo:"WIKUK",tipo:"producto",prioridad:"alta",estado:"pendiente",escalarCEO:false,semana:15,solucion:"",fechaSolucion:null,accionPendiente:"Verificar con calidad y responder al cliente esta semana."},
-  {id:2,titulo:"Retraso entrega 4 semanas — Cárnicas Bernal",desc:"Pedido de tripa natural pendiente desde semana 12. El cliente ha llamado 3 veces. En riesgo de perderlo.",agenteId:"wk2",equipo:"WIKUK",tipo:"logistica",prioridad:"alta",estado:"pendiente",escalarCEO:false,semana:15,solucion:"",fechaSolucion:null,accionPendiente:"Contactar con almacén para dar fecha definitiva."},
-  {id:3,titulo:"Competidor Fribin con -25% en deshidratados",desc:"Verónica informa que Fribin está haciendo una campaña agresiva en su zona. Ha perdido 2 clientes esta semana.",agenteId:"wk2",equipo:"WIKUK",tipo:"competencia",prioridad:"media",estado:"pendiente",escalarCEO:false,semana:14,solucion:"",fechaSolucion:null,accionPendiente:"Revisar política de precios y preparar contraoferta."}
+  {id:1,titulo:"Embutidos Monachil — producto defectuoso",desc:"El cliente recibió 3 cajas de Burger Meet con mal olor. Dice que lleva pasando 2 semanas y está pensando en cambiar de proveedor.",agenteId:"wk1",equipo:"WIKUK",tipo:"producto",prioridad:"alta",estado:"pendiente",escalarCEO:false,nivelEscalado:1,historialEscalado:[],semana:15,solucion:"",fechaSolucion:null,accionPendiente:"Verificar con calidad y responder al cliente esta semana."},
+  {id:2,titulo:"Retraso entrega 4 semanas — Cárnicas Bernal",desc:"Pedido de tripa natural pendiente desde semana 12. El cliente ha llamado 3 veces. En riesgo de perderlo.",agenteId:"wk2",equipo:"WIKUK",tipo:"logistica",prioridad:"alta",estado:"pendiente",escalarCEO:false,nivelEscalado:1,historialEscalado:[],semana:15,solucion:"",fechaSolucion:null,accionPendiente:"Contactar con almacén para dar fecha definitiva."},
+  {id:3,titulo:"Competidor Fribin con -25% en deshidratados",desc:"Verónica informa que Fribin está haciendo una campaña agresiva en su zona. Ha perdido 2 clientes esta semana.",agenteId:"wk2",equipo:"WIKUK",tipo:"competencia",prioridad:"media",estado:"pendiente",escalarCEO:false,nivelEscalado:1,historialEscalado:[],semana:14,solucion:"",fechaSolucion:null,accionPendiente:"Revisar política de precios y preparar contraoferta."}
 ];
 const SEMANAS=[2,3,4,5,6,7,8,9,10,11,12,13];
 const DW={ventas:[84200,92100,88300,75000,110000,68000,98000,85000,91000,89000,102000,96000],
@@ -2624,7 +2636,12 @@ function Reporting({usuario,reportes,onSaveReporte,objetivos,recuperacionesAsign
 
         {/* Contenido paso */}
         {step===0&&<PasoVentas data={ventas} onChange={(k,v)=>setVentas(p=>({...p,[k]:v}))} objetivo={objetivo}/>}
-        {step===1&&<PasoVisitas clientes={misClientes} visitas={visitas} onVisita={handleVisita} nuevosClientes={nuevosClientes} onGuardarNuevo={(c)=>setNuevosClientes(p=>[...p.filter(x=>x.id!==c.id),c])} onEditarNuevo={setEditandoNuevo} onSubPantalla={setSubPantalla} onOpenFicha={onOpenFicha}/>}
+        {step===1&&<PasoVisitas clientes={misClientes} visitas={visitas} onVisita={handleVisita} nuevosClientes={nuevosClientes} onGuardarNuevo={(c)=>{
+          // Save to Firebase and global clientesDB
+          const cFirebase={...c,agente:uid,equipo:usuario.equipo||"WIKUK",fechaAlta:new Date().toLocaleDateString("es-ES")};
+          if(window.fbGuardar) window.fbGuardar('clientes',c.id,cFirebase);
+          setNuevosClientes(p=>[...p.filter(x=>x.id!==c.id),c]);
+        }} onEditarNuevo={setEditandoNuevo} onSubPantalla={setSubPantalla} onOpenFicha={onOpenFicha}/>}
         {step===2&&<PasoMuestras muestras={muestras} onAdd={m=>setMuestras(p=>[...p,m])} onDel={id=>setMuestras(p=>p.filter(m=>m.id!==id))} muestrasPendientes={[]} onFeedback={()=>{}} uid={uid} onSubPantalla={setSubPantalla}/>}
         {step===3&&<PasoRecuperacion items={repRecuperaciones} onAdd={r=>setRepRecuperaciones(p=>[...p,r])} onDel={id=>setRepRecuperaciones(p=>p.filter(r=>r.id!==id))} onEdit={r=>setRepRecuperaciones(p=>p.map(x=>x.id===r.id?r:x))} recuperacionesAsignadas={recAsig} addRec={addRec} uid={uid} usuario={usuario}/>}
         {step===4&&<PasoResumen rep={repCompleto} objetivo={objetivo} color={color} onEnviar={handleEnviar} enviado={enviado}/>}
@@ -2772,40 +2789,94 @@ function Estadisticas({usuario}){
 // ══════════════════════════════════════════════════════════════════
 // MODULE 4 · INCIDENCIAS
 // ══════════════════════════════════════════════════════════════════
-function IncModal({inc,persona,onClose,onUpdate}){
+function IncModal({inc,persona,onClose,onUpdate,respConfig={}}){
   const [sol,setSol]=useState(inc.solucion||"");
   const [accion,setAccion]=useState(inc.accionPendiente||"");
   const [estado,setEstado]=useState(inc.estado);
-  const [escalar,setEscalar]=useState(inc.escalarCEO);
+  const [selDpto,setSelDpto]=useState("");
   const tipo=TIPOS_INC.find(t=>t.k===inc.tipo);
   const prio=PRIOS.find(p=>p.k===inc.prioridad);
   const autor=VENDEDORES.find(a=>a.id===inc.agenteId);
-  const canEdit=["jefe","director","ceo"].includes(persona.rol)&&(persona.rol!=="jefe"||persona.equipo===inc.equipo);
+
+  const dpto = inc.departamentoEscalado ? DEPARTAMENTOS.find(d=>d.k===inc.departamentoEscalado) : null;
+  const escalada = !!inc.departamentoEscalado;
+
+  // Permisos
+  const esAgente   = persona.rol==="agente" && inc.agenteId===persona.id;
+  const esJefe     = persona.rol==="jefe" && persona.equipo===inc.equipo;
+  const esDirector = persona.rol==="director";
+  const esCEO      = persona.rol==="ceo";
+  const esResp     = persona.rol==="responsable" && inc.responsableId===persona.id;
+
+  // Jefe SIEMPRE puede editar/cerrar su incidencia (con o sin escalar)
+  const puedeEditar = esJefe || esResp || esDirector;
+  // Solo jefe puede escalar (si no está ya resuelta)
+  const puedeEscalar = esJefe && !escalada && inc.estado!=="resuelta" && inc.estado!=="sin_solucion";
+  // CEO solo lee, agente solo lee la suya
+  const soloLectura = esAgente || esCEO;
+  // Responsable puede marcar para CEO
+  const [notifCEO,setNotifCEO] = useState(!!inc.notificarCEO);
+
+  const agenteName=(id)=>VENDEDORES.find(v=>v.id===id)?.nombre||id||"";
+  const respName=(uid)=>VENDEDORES.find(v=>v.id===uid)?.nombre||uid||"Sin asignar";
+
   return(
-    <div style={{position:"fixed",inset:0,background:"#00000077",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <div style={{background:C.white,borderRadius:16,width:"min(600px,96vw)",maxHeight:"88vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 64px #0004"}}>
-        <div style={{padding:"16px 22px",borderBottom:`1px solid ${C.border}`,background:prio?.color+"0C"}}>
-          <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:8}}>
-            <span style={{fontSize:14}}>{prio?.dot}</span>
-            {escalar&&<Tag label="📌 CEO" color={C.purple}/>}
+    <div style={{position:"fixed",inset:0,background:"#00000077",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",padding:8}}>
+      <div style={{background:C.white,borderRadius:16,width:"min(620px,96vw)",maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 64px #0004"}}>
+
+        {/* Header */}
+        <div style={{padding:"16px 22px",borderBottom:`1px solid ${C.border}`,background:escalada?(dpto?.color||C.muted)+"12":prio?.color+"0C"}}>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8,alignItems:"center"}}>
+            <span style={{fontSize:13}}>{prio?.dot}</span>
             <Tag label={tipo?.label} color={tipo?.color||C.muted}/>
             <Tag label={inc.equipo} color={inc.equipo==="WIKUK"?C.green:C.amber}/>
             <Tag label={`S${inc.semana}`} color={C.muted} bg={C.bg}/>
+            {escalada&&<span style={{padding:"3px 10px",borderRadius:6,background:(dpto?.color||C.muted)+"20",color:dpto?.color||C.muted,fontSize:11,fontWeight:700}}>{dpto?.icon} Escalada a {dpto?.label}</span>}
+            {esCEO&&<span style={{padding:"3px 8px",borderRadius:5,background:C.purpleL,color:C.purple,fontSize:10,fontWeight:700}}>👁 Solo lectura</span>}
           </div>
           <p style={{margin:"0 0 6px",fontSize:15,fontWeight:800,color:C.text}}>{inc.titulo}</p>
-          <div style={{display:"flex",gap:7,alignItems:"center"}}><Avt nombre={autor?.nombre||"?"} color={autor?.color||C.muted} size={20}/><span style={{fontSize:11,color:C.muted}}>Reportado por <b style={{color:C.text}}>{autor?.nombre}</b></span></div>
+          <div style={{display:"flex",gap:7,alignItems:"center"}}>
+            <Avt nombre={autor?.nombre||"?"} color={autor?.color||C.muted} size={20}/>
+            <span style={{fontSize:11,color:C.muted}}>Reportado por <b style={{color:C.text}}>{autor?.nombre}</b></span>
+            {escalada&&inc.responsableId&&(
+              <span style={{fontSize:11,color:C.muted,marginLeft:8}}>→ Resp: <b style={{color:dpto?.color}}>{respName(inc.responsableId)}</b></span>
+            )}
+          </div>
         </div>
+
         <div style={{overflowY:"auto",flex:1,padding:"18px 22px"}}>
+
+          {/* Descripción */}
           <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Descripción</p>
-          <p style={{margin:"0 0 18px",fontSize:13,color:C.text,lineHeight:1.6,background:C.bg,borderRadius:8,padding:"10px 12px"}}>{inc.desc}</p>
-          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:18}}>
+          <p style={{margin:"0 0 16px",fontSize:13,color:C.text,lineHeight:1.6,background:C.bg,borderRadius:8,padding:"10px 12px"}}>{inc.desc}</p>
+
+          {/* Estado */}
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:16}}>
             <p style={{margin:0,fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Estado:</p>
             <Tag label={(ESTADOS_INC[estado]||ESTADOS_INC.abierta).label} color={(ESTADOS_INC[estado]||ESTADOS_INC.abierta).color} bg={(ESTADOS_INC[estado]||ESTADOS_INC.abierta).bg}/>
           </div>
-          {canEdit&&(
+
+          {/* Historial escalado */}
+          {(inc.historialEscalado||[]).length>0&&(
+            <div style={{marginBottom:16}}>
+              <p style={{margin:"0 0 8px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Historial</p>
+              {inc.historialEscalado.map((h,i)=>(
+                <div key={i} style={{display:"flex",gap:8,padding:"6px 10px",background:C.bg,borderRadius:7,marginBottom:5,borderLeft:`3px solid ${DEPARTAMENTOS.find(d=>d.k===h.dpto)?.color||C.muted}`}}>
+                  <span>{DEPARTAMENTOS.find(d=>d.k===h.dpto)?.icon||"→"}</span>
+                  <div>
+                    <p style={{margin:0,fontSize:11,fontWeight:700,color:C.text}}>{h.accion}</p>
+                    <p style={{margin:0,fontSize:10,color:C.muted}}>{h.por} · {h.fecha}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Panel responsable / jefe: editar */}
+          {puedeEditar&&(
             <>
-              <p style={{margin:"0 0 7px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Actualizar estado</p>
-              <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:16}}>
+              <p style={{margin:"0 0 6px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Actualizar estado</p>
+              <div style={{display:"flex",gap:5,flexWrap:"wrap",marginBottom:14}}>
                 {Object.entries(ESTADOS_INC).map(([k,v])=>(
                   <button key={k} onClick={()=>setEstado(k)} style={{padding:"6px 12px",borderRadius:7,border:`2px solid ${estado===k?v.color:C.border}`,background:estado===k?v.bg:"transparent",color:estado===k?v.color:C.muted,fontWeight:estado===k?700:400,fontSize:12,cursor:"pointer"}}>{v.label}</button>
                 ))}
@@ -2814,24 +2885,68 @@ function IncModal({inc,persona,onClose,onUpdate}){
               <textarea value={sol} onChange={e=>setSol(e.target.value)} rows={3} placeholder="Describe la acción tomada…" style={{...iSt,resize:"vertical",lineHeight:1.5,marginBottom:12}}/>
               <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Acción pendiente</p>
               <textarea value={accion} onChange={e=>setAccion(e.target.value)} rows={2} placeholder="¿Qué queda por hacer?" style={{...iSt,resize:"vertical",lineHeight:1.5,marginBottom:14}}/>
-              <button onClick={()=>setEscalar(e=>!e)} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",borderRadius:8,border:`2px solid ${escalar?C.purple:C.border}`,background:escalar?C.purpleL:"transparent",cursor:"pointer",fontSize:12,fontWeight:escalar?700:400,color:escalar?C.purple:C.muted}}>
-                <div style={{width:14,height:14,borderRadius:3,border:`2px solid ${escalar?C.purple:C.border}`,background:escalar?C.purple:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>{escalar&&<Ico d={IC.check} s={9} c="#fff"/>}</div>
-                Importante para CEO
-              </button>
             </>
           )}
-          {!canEdit&&inc.solucion&&(
+
+          {/* Panel escalar (solo jefe, solo si no escalada) */}
+          {puedeEscalar&&(
+            <div style={{background:"#FFF7F0",borderRadius:12,padding:"14px 16px",border:`1px solid #C2622D44`}}>
+              <p style={{margin:"0 0 10px",fontSize:12,fontWeight:800,color:"#C2622D"}}>📤 Escalar a departamento</p>
+              <p style={{margin:"0 0 10px",fontSize:12,color:C.muted}}>Selecciona el departamento responsable de resolver esta incidencia:</p>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:12}}>
+                {DEPARTAMENTOS.map(d=>{
+                  const respUid=respConfig[d.k];
+                  const respNombre=respUid?respName(respUid):"Sin responsable";
+                  return(
+                    <button key={d.k} onClick={()=>setSelDpto(selDpto===d.k?"":d.k)}
+                      style={{padding:"8px 14px",borderRadius:9,border:`2px solid ${selDpto===d.k?d.color:C.border}`,background:selDpto===d.k?d.color+"18":"#fff",color:selDpto===d.k?d.color:C.muted,fontWeight:selDpto===d.k?700:400,fontSize:12,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2,minWidth:80}}>
+                      <span style={{fontSize:18}}>{d.icon}</span>
+                      <span>{d.label}</span>
+                      <span style={{fontSize:9,color:selDpto===d.k?d.color:C.light}}>{respNombre}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {selDpto&&(
+                <button onClick={()=>{
+                  const d=DEPARTAMENTOS.find(x=>x.k===selDpto);
+                  const respUid=respConfig[selDpto]||null;
+                  const histEntry={dpto:selDpto,accion:`Escalada a ${d?.label} (${respName(respUid)})`,por:persona.nombre||persona.id,fecha:new Date().toLocaleDateString("es-ES")};
+                  onUpdate({...inc,estado:"en_proceso",departamentoEscalado:selDpto,responsableId:respUid,historialEscalado:[...(inc.historialEscalado||[]),histEntry]});
+                  onClose();
+                }} style={{width:"100%",padding:"10px",borderRadius:9,border:"none",background:DEPARTAMENTOS.find(d=>d.k===selDpto)?.color||C.navy,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                  Escalar a {DEPARTAMENTOS.find(d=>d.k===selDpto)?.label} {DEPARTAMENTOS.find(d=>d.k===selDpto)?.icon}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Responsable: marcar para CEO */}
+          {esResp&&(
+            <button onClick={()=>setNotifCEO(n=>!n)}
+              style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderRadius:9,border:`2px solid ${notifCEO?C.purple:C.border}`,background:notifCEO?C.purpleL:"transparent",cursor:"pointer",fontSize:12,fontWeight:notifCEO?700:400,color:notifCEO?C.purple:C.muted,marginTop:12}}>
+              <div style={{width:16,height:16,borderRadius:4,border:`2px solid ${notifCEO?C.purple:C.border}`,background:notifCEO?C.purple:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                {notifCEO&&<span style={{color:"#fff",fontSize:10,fontWeight:900}}>✓</span>}
+              </div>
+              👁 Notificar al CEO — requiere su conocimiento
+            </button>
+          )}
+
+          {/* Solo lectura: solución si existe */}
+          {soloLectura&&inc.solucion&&(
             <div style={{background:inc.estado==="resuelta"?C.greenL:C.amberL,borderRadius:8,padding:"10px 12px",fontSize:13,color:C.text}}>{inc.solucion}</div>
           )}
         </div>
+
         <div style={{padding:"12px 22px",borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"flex-end",gap:10}}>
           <button onClick={onClose} style={{padding:"8px 18px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.muted,fontWeight:600,fontSize:13,cursor:"pointer"}}>Cerrar</button>
-          {canEdit&&<button onClick={()=>{onUpdate({...inc,solucion:sol,accionPendiente:accion,estado,escalarCEO:escalar,fechaSolucion:estado==="resuelta"?new Date().toISOString().split("T")[0]:inc.fechaSolucion});onClose();}} style={{padding:"8px 22px",borderRadius:8,border:"none",background:C.blue,color:C.white,fontWeight:700,fontSize:13,cursor:"pointer"}}>Guardar</button>}
+          {puedeEditar&&<button onClick={()=>{onUpdate({...inc,solucion:sol,accionPendiente:accion,estado,notificarCEO:notifCEO,fechaSolucion:estado==="resuelta"?new Date().toISOString().split("T")[0]:inc.fechaSolucion});onClose();}} style={{padding:"8px 22px",borderRadius:8,border:"none",background:C.blue,color:C.white,fontWeight:700,fontSize:13,cursor:"pointer"}}>Guardar</button>}
         </div>
       </div>
     </div>
   );
 }
+
 
 function NewIncForm({persona,onSave,onClose}){
   const [titulo,setTitulo]=useState("");
@@ -2864,7 +2979,7 @@ function NewIncForm({persona,onSave,onClose}){
         </div>
         <div style={{padding:"12px 22px",borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"flex-end",gap:10}}>
           <button onClick={onClose} style={{padding:"8px 18px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.muted,fontWeight:600,fontSize:13,cursor:"pointer"}}>Cancelar</button>
-          <button onClick={()=>{onSave({id:++NEXT_INC_ID,titulo:titulo.trim(),desc:desc.trim(),agenteId:persona.id,equipo:persona.equipo,tipo,prioridad:prio,estado:"abierta",escalarCEO:prio==="alta",semana:SEMANA_ACTUAL,solucion:"",fechaSolucion:null,accionPendiente:""});onClose();}} disabled={!valid} style={{padding:"8px 22px",borderRadius:8,border:"none",background:valid?C.blue:C.light,color:C.white,fontWeight:700,fontSize:13,cursor:valid?"pointer":"not-allowed"}}>
+          <button onClick={()=>{onSave({id:++NEXT_INC_ID,titulo:titulo.trim(),desc:desc.trim(),agenteId:persona.id,equipo:persona.equipo,tipo,prioridad:prio,estado:"abierta",escalarCEO:false,departamentoEscalado:null,responsableId:null,historialEscalado:[],semana:SEMANA_ACTUAL,solucion:"",fechaSolucion:null,accionPendiente:""});onClose();}} disabled={!valid} style={{padding:"8px 22px",borderRadius:8,border:"none",background:valid?C.blue:C.light,color:C.white,fontWeight:700,fontSize:13,cursor:valid?"pointer":"not-allowed"}}>
             Crear incidencia
           </button>
         </div>
@@ -2873,7 +2988,7 @@ function NewIncForm({persona,onSave,onClose}){
   );
 }
 
-function Incidencias({usuario,incidencias,onAdd,onUpdate}){
+function Incidencias({usuario,incidencias,onAdd,onUpdate,respConfig={}}){
   const {rol,equipo,color}=usuario;
   const [detalle,setDetalle]=useState(null);
   const [showNew,setShowNew]=useState(false);
@@ -2883,10 +2998,21 @@ function Incidencias({usuario,incidencias,onAdd,onUpdate}){
   const [tab,setTab]=useState(rol==="ceo"?"resumen":"lista");
 
   const base=useMemo(()=>{
-    if(rol==="agente")return incidencias.filter(i=>i.agenteId===usuario.id);
-    if(rol==="jefe")return incidencias.filter(i=>i.equipo===equipo);
-    return incidencias;
+    if(rol==="agente") return incidencias.filter(i=>i.agenteId===usuario.id);
+    if(rol==="jefe")   return incidencias.filter(i=>i.equipo===equipo);
+    if(rol==="responsable") return incidencias.filter(i=>i.responsableId===usuario.id);
+    if(rol==="ceo")    return incidencias.filter(i=>i.notificarCEO===true);
+    return incidencias; // director, admin ven todo
   },[rol,equipo,usuario.id,incidencias]);
+
+  // Incidencias pendientes para este responsable (escaladas a él sin resolver)
+  const misEscaladas=rol==="responsable"
+    ? incidencias.filter(i=>i.responsableId===usuario.id&&i.estado!=="resuelta"&&i.estado!=="sin_solucion")
+    : [];
+
+  const escaladasSinResp=rol==="jefe"
+    ? incidencias.filter(i=>i.equipo===equipo&&i.departamentoEscalado&&i.estado!=="resuelta")
+    : [];
 
   const filtered=useMemo(()=>base.filter(i=>{
     if(fEst!=="todas"&&i.estado!==fEst)return false;
@@ -2896,12 +3022,34 @@ function Incidencias({usuario,incidencias,onAdd,onUpdate}){
   }),[base,fEst,fEq,fPrio]);
 
   const stats={abiertas:base.filter(i=>i.estado==="abierta").length,enProceso:base.filter(i=>i.estado==="en_proceso").length,resueltas:base.filter(i=>i.estado==="resuelta").length,sinSol:base.filter(i=>i.estado==="sin_solucion").length};
-  const ceoIncs=incidencias.filter(i=>i.escalarCEO);
+  const ceoIncs=incidencias.filter(i=>i.notificarCEO===true);
 
   return(
     <>
-      {detalle&&<IncModal inc={detalle} persona={usuario} onClose={()=>setDetalle(null)} onUpdate={i=>{onUpdate(i);setDetalle(null);}}/>}
+      {detalle&&<IncModal inc={detalle} persona={usuario} onClose={()=>setDetalle(null)} onUpdate={i=>{onUpdate(i);setDetalle(null);}} respConfig={respConfig}/>}
       {showNew&&<NewIncForm persona={usuario} onSave={i=>{onAdd(i);setShowNew(false);}} onClose={()=>setShowNew(false)}/>}
+
+      {/* Banner responsable: incidencias asignadas pendientes */}
+      {rol==="responsable"&&misEscaladas.length>0&&(
+        <div style={{background:"#FFF7F0",border:"1.5px solid #C2622D44",borderRadius:12,padding:"12px 16px",marginBottom:16,display:"flex",gap:12,alignItems:"center"}}>
+          <span style={{fontSize:24}}>📨</span>
+          <div style={{flex:1}}>
+            <p style={{margin:"0 0 2px",fontSize:13,fontWeight:800,color:"#C2622D"}}>Tienes {misEscaladas.length} incidencia{misEscaladas.length!==1?"s":""} pendiente{misEscaladas.length!==1?"s":""}</p>
+            <p style={{margin:0,fontSize:12,color:C.muted}}>Escaladas por los jefes de equipo — requieren tu atención</p>
+          </div>
+        </div>
+      )}
+
+      {/* Banner jefe: incidencias escaladas en curso */}
+      {rol==="jefe"&&escaladasSinResp.length>0&&(
+        <div style={{background:C.blueL,border:`1.5px solid ${C.blue}44`,borderRadius:12,padding:"12px 16px",marginBottom:16,display:"flex",gap:12,alignItems:"center"}}>
+          <span style={{fontSize:24}}>📤</span>
+          <div>
+            <p style={{margin:"0 0 2px",fontSize:13,fontWeight:800,color:C.blue}}>{escaladasSinResp.length} incidencia{escaladasSinResp.length!==1?"s":""} escalada{escaladasSinResp.length!==1?"s":""} a departamentos</p>
+            <p style={{margin:0,fontSize:12,color:C.muted}}>En gestión por responsables externos — pendientes de cierre</p>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:18}}>
@@ -3002,7 +3150,12 @@ function Incidencias({usuario,incidencias,onAdd,onUpdate}){
               ))}
             </div>
           </div>
-          {filtered.length===0?<div style={{textAlign:"center",padding:40,background:C.white,borderRadius:12,border:`1px solid ${C.border}`,color:C.muted,fontSize:13}}>Sin incidencias con estos filtros</div>
+          {filtered.length===0?<div style={{textAlign:"center",padding:40,background:C.white,borderRadius:12,border:`1px solid ${C.border}`,color:C.muted,fontSize:13}}>
+            {rol==="ceo"
+              ? <><p style={{fontSize:28,marginBottom:8}}>✅</p><p style={{fontWeight:700,color:C.text}}>Sin incidencias para tu atención</p><p style={{fontSize:12}}>Los responsables de departamento te notificarán cuando sea necesario</p></>
+              : "Sin incidencias con estos filtros"
+            }
+          </div>
           :filtered.map(i=>{
             const tipo=TIPOS_INC.find(t=>t.k===i.tipo);
             const prio=PRIOS.find(p=>p.k===i.prioridad);
@@ -3016,7 +3169,8 @@ function Incidencias({usuario,incidencias,onAdd,onUpdate}){
                   <div style={{flex:1}}>
                     <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:5,alignItems:"center"}}>
                       <span style={{fontSize:12}}>{prio?.dot}</span>
-                      {i.escalarCEO&&<Tag label="📌 CEO" color={C.purple}/>}
+                      {i.departamentoEscalado&&(()=>{const d=DEPARTAMENTOS.find(x=>x.k===i.departamentoEscalado);return d?<Tag label={`${d.icon} ${d.label}`} color={d.color}/>:null;})()}
+                      {!i.departamentoEscalado&&i.escalarCEO&&<Tag label="📌 CEO" color={C.purple}/>}
                       <Tag label={tipo?.label||i.tipo} color={tipo?.color||C.muted}/>
                       <Tag label={est.label} color={est.color} bg={est.bg}/>
                       <Tag label={i.equipo} color={i.equipo==="WIKUK"?C.green:C.amber}/>
@@ -3042,6 +3196,48 @@ function Incidencias({usuario,incidencias,onAdd,onUpdate}){
 // ══════════════════════════════════════════════════════════════════
 // MODULE 5 · ADMIN
 // ══════════════════════════════════════════════════════════════════
+
+// ── Configuración de responsables por departamento ──────────────────
+function ConfigResponsables({respConfig, setRespConfig}){
+  const agentes=VENDEDORES.filter(v=>["agente","jefe","director","responsable"].includes(v.rol));
+  
+  const save=(dpto,uid)=>{
+    const next={...respConfig,[dpto]:uid};
+    setRespConfig(next);
+    if(window.fbGuardar) window.fbGuardar('config','responsables',next);
+  };
+
+  return(
+    <div>
+      <p style={{margin:"0 0 6px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:"0.08em"}}>Responsables por departamento</p>
+      <p style={{margin:"0 0 18px",fontSize:12,color:C.muted}}>Cuando un jefe de equipo escala una incidencia, llega al responsable asignado a ese departamento.</p>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {DEPARTAMENTOS.map(d=>{
+          const actual=respConfig[d.k];
+          const persona=VENDEDORES.find(v=>v.id===actual);
+          return(
+            <div key={d.k} style={{background:C.white,borderRadius:12,border:`1px solid ${C.border}`,padding:"14px 16px",display:"flex",gap:14,alignItems:"center"}}>
+              <div style={{width:40,height:40,borderRadius:10,background:d.color+"18",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,flexShrink:0}}>
+                {d.icon}
+              </div>
+              <div style={{flex:1}}>
+                <p style={{margin:"0 0 2px",fontSize:13,fontWeight:700,color:C.text}}>{d.label}</p>
+                {persona&&<p style={{margin:0,fontSize:11,color:d.color,fontWeight:600}}>{persona.nombre}</p>}
+                {!persona&&<p style={{margin:0,fontSize:11,color:C.light,fontStyle:"italic"}}>Sin responsable asignado</p>}
+              </div>
+              <select value={actual||""} onChange={e=>save(d.k,e.target.value||null)}
+                style={{padding:"7px 12px",borderRadius:8,border:`1.5px solid ${actual?d.color:C.border}`,fontSize:12,color:actual?d.color:C.muted,background:C.white,fontWeight:actual?700:400,cursor:"pointer",maxWidth:200}}>
+                <option value="">-- Sin asignar --</option>
+                {agentes.map(v=><option key={v.id} value={v.id}>{v.nombre} ({v.equipo||v.rol})</option>)}
+              </select>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function Admin({usuario}){
   const {rol}=usuario;
   // ── hooks SIEMPRE antes de cualquier return condicional ──
@@ -4092,9 +4288,199 @@ function FichaCliente({cliente, reportes=[], muestras=[], recuperaciones=[], onB
 // ══════════════════════════════════════════════════════════════════
 // MIS CLIENTES — lista con acceso rápido a ficha
 // ══════════════════════════════════════════════════════════════════
-function MisClientes({clientes=[], muestras=[], recuperaciones=[], reportes=[], onOpenFicha}){
+// ─── Formulario nuevo cliente ─────────────────────────────────────
+function NuevoClienteForm({usuario, onSave, onClose}){
+  const [foto,setFoto]=useState(null);
+  const [form,setForm]=useState({
+    nombre:"",codigoERP:"",nif:"",
+    direccion:"",cp:"",ciudad:"",provincia:"",
+    telefono:"",email:"",web:"",
+    contacto:"",cargoContacto:"",
+    sector:"carnico",tipoCliente:"obrador",
+    ruta:"",agente:usuario.id,equipo:usuario.equipo||"WIKUK",
+    notas:"",activo:true,
+  });
+  const [tab,setTab]=useState("datos");
+  const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
+  const valid=form.nombre.trim().length>2;
+
+  const handleFoto=(e)=>{
+    const file=e.target.files[0];
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>setFoto(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave=()=>{
+    const id="C"+String(Date.now()).slice(-6);
+    const nuevo={...form,id,foto:foto||null,fechaAlta:new Date().toLocaleDateString("es-ES")};
+    if(window.fbGuardar) window.fbGuardar('clientes',id,nuevo);
+    onSave(nuevo);
+    onClose();
+  };
+
+  const SECTORES=[{k:"carnico",l:"Cárnico"},{k:"hosteleria",l:"Hostelería"},{k:"retail",l:"Retail"},{k:"exportacion",l:"Exportación"},{k:"industria",l:"Industria"},{k:"otro",l:"Otro"}];
+  const TIPOS=[{k:"obrador",l:"Obrador"},{k:"industria",l:"Industria cárnica"},{k:"carniceria",l:"Carnicería"},{k:"restaurante",l:"Restaurante"},{k:"supermercado",l:"Supermercado"},{k:"mayorista",l:"Mayorista"},{k:"exportador",l:"Exportador"}];
+  const fld={...iSt,marginBottom:0};
+
+  return(
+    <div style={{position:"fixed",inset:0,background:"#00000088",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:8}}>
+      <div style={{background:C.white,borderRadius:18,width:"min(660px,96vw)",maxHeight:"92vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 24px 64px #0005"}}>
+
+        {/* Header */}
+        <div style={{padding:"16px 22px",borderBottom:`1px solid ${C.border}`,background:C.navy,display:"flex",gap:10,alignItems:"center"}}>
+          <span style={{fontSize:20}}>🏢</span>
+          <p style={{margin:0,fontSize:15,fontWeight:800,color:"#fff",flex:1}}>Nuevo cliente</p>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"#9CA3AF",fontSize:20,cursor:"pointer"}}>✕</button>
+        </div>
+
+        {/* Tabs */}
+        <div style={{display:"flex",borderBottom:`1px solid ${C.border}`,background:C.bg}}>
+          {[["datos","📋 Datos"],["contacto","📞 Contacto"],["foto","📸 Tarjeta"]].map(([k,l])=>(
+            <button key={k} onClick={()=>setTab(k)}
+              style={{flex:1,padding:"10px 4px",border:"none",borderBottom:`2px solid ${tab===k?C.blue:"transparent"}`,background:"transparent",color:tab===k?C.blue:C.muted,fontWeight:tab===k?700:400,fontSize:12,cursor:"pointer"}}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        <div style={{flex:1,overflowY:"auto",padding:"20px 22px"}}>
+
+          {/* Tab Datos */}
+          {tab==="datos"&&(
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              <div>
+                <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Nombre empresa <span style={{color:C.red}}>*</span></p>
+                <input value={form.nombre} onChange={e=>upd("nombre",e.target.value)} placeholder="Ej: CARNICAS MARTINEZ SL" style={fld}/>
+              </div>
+              <div style={{display:"flex",gap:12}}>
+                <div style={{flex:1}}>
+                  <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Código ERP</p>
+                  <input value={form.codigoERP} onChange={e=>upd("codigoERP",e.target.value)} placeholder="Ej: C12345" style={fld}/>
+                </div>
+                <div style={{flex:1}}>
+                  <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>NIF / CIF</p>
+                  <input value={form.nif} onChange={e=>upd("nif",e.target.value)} placeholder="B12345678" style={fld}/>
+                </div>
+              </div>
+              <div>
+                <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Dirección</p>
+                <input value={form.direccion} onChange={e=>upd("direccion",e.target.value)} placeholder="Calle, número..." style={fld}/>
+              </div>
+              <div style={{display:"flex",gap:12}}>
+                <div style={{flex:1}}>
+                  <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>C.P.</p>
+                  <input value={form.cp} onChange={e=>upd("cp",e.target.value)} placeholder="28001" style={fld}/>
+                </div>
+                <div style={{flex:2}}>
+                  <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Ciudad</p>
+                  <input value={form.ciudad} onChange={e=>upd("ciudad",e.target.value)} placeholder="Madrid" style={fld}/>
+                </div>
+                <div style={{flex:2}}>
+                  <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Provincia</p>
+                  <input value={form.provincia} onChange={e=>upd("provincia",e.target.value)} placeholder="Madrid" style={fld}/>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:12}}>
+                <div style={{flex:1}}>
+                  <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Sector</p>
+                  <select value={form.sector} onChange={e=>upd("sector",e.target.value)} style={{...fld,background:C.white}}>
+                    {SECTORES.map(s=><option key={s.k} value={s.k}>{s.l}</option>)}
+                  </select>
+                </div>
+                <div style={{flex:1}}>
+                  <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Tipo cliente</p>
+                  <select value={form.tipoCliente} onChange={e=>upd("tipoCliente",e.target.value)} style={{...fld,background:C.white}}>
+                    {TIPOS.map(t=><option key={t.k} value={t.k}>{t.l}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{display:"flex",gap:12}}>
+                <div style={{flex:1}}>
+                  <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Ruta</p>
+                  <input value={form.ruta} onChange={e=>upd("ruta",e.target.value)} placeholder="Ej: NORTE-MAD" style={fld}/>
+                </div>
+                <div style={{flex:1}}>
+                  <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Agente asignado</p>
+                  <select value={form.agente} onChange={e=>upd("agente",e.target.value)} style={{...fld,background:C.white}}>
+                    {VENDEDORES.filter(v=>v.rol==="agente").map(v=><option key={v.id} value={v.id}>{v.nombre}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Notas iniciales</p>
+                <textarea value={form.notas} onChange={e=>upd("notas",e.target.value)} rows={3} placeholder="Observaciones, cómo se captó, potencial..." style={{...fld,resize:"vertical"}}/>
+              </div>
+            </div>
+          )}
+
+          {/* Tab Contacto */}
+          {tab==="contacto"&&(
+            <div style={{display:"flex",flexDirection:"column",gap:14}}>
+              <div>
+                <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Nombre del contacto</p>
+                <input value={form.contacto} onChange={e=>upd("contacto",e.target.value)} placeholder="Juan García Pérez" style={fld}/>
+              </div>
+              <div>
+                <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Cargo</p>
+                <input value={form.cargoContacto} onChange={e=>upd("cargoContacto",e.target.value)} placeholder="Director de Compras" style={fld}/>
+              </div>
+              <div>
+                <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Teléfono</p>
+                <input value={form.telefono} onChange={e=>upd("telefono",e.target.value)} placeholder="+34 600 000 000" style={fld} type="tel"/>
+              </div>
+              <div>
+                <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Email</p>
+                <input value={form.email} onChange={e=>upd("email",e.target.value)} placeholder="compras@empresa.com" style={fld} type="email"/>
+              </div>
+              <div>
+                <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Web</p>
+                <input value={form.web} onChange={e=>upd("web",e.target.value)} placeholder="www.empresa.com" style={fld}/>
+              </div>
+            </div>
+          )}
+
+          {/* Tab Foto tarjeta */}
+          {tab==="foto"&&(
+            <div>
+              <p style={{margin:"0 0 14px",fontSize:13,color:C.muted}}>Saca una foto a la tarjeta de visita del cliente para guardar sus datos automáticamente.</p>
+              {foto?(
+                <div style={{textAlign:"center"}}>
+                  <img src={foto} alt="Tarjeta" style={{maxWidth:"100%",maxHeight:280,borderRadius:12,border:`1px solid ${C.border}`,objectFit:"contain"}}/>
+                  <div style={{marginTop:12,display:"flex",gap:8,justifyContent:"center"}}>
+                    <button onClick={()=>setFoto(null)} style={{padding:"8px 16px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",color:C.muted,fontSize:12,cursor:"pointer"}}>Eliminar foto</button>
+                  </div>
+                </div>
+              ):(
+                <label style={{display:"block",border:`2px dashed ${C.border}`,borderRadius:14,padding:"40px 20px",textAlign:"center",cursor:"pointer",background:C.bg}}>
+                  <p style={{margin:"0 0 8px",fontSize:32}}>📷</p>
+                  <p style={{margin:"0 0 6px",fontSize:14,fontWeight:700,color:C.text}}>Subir foto de tarjeta</p>
+                  <p style={{margin:0,fontSize:12,color:C.muted}}>Toca para seleccionar o hacer foto</p>
+                  <input type="file" accept="image/*" capture="environment" onChange={handleFoto} style={{display:"none"}}/>
+                </label>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div style={{padding:"14px 22px",borderTop:`1px solid ${C.border}`,display:"flex",gap:10,justifyContent:"flex-end",alignItems:"center"}}>
+          {!valid&&<p style={{margin:0,fontSize:12,color:C.muted,flex:1}}>* El nombre de la empresa es obligatorio</p>}
+          <button onClick={onClose} style={{padding:"10px 20px",borderRadius:9,border:`1px solid ${C.border}`,background:"transparent",color:C.muted,fontWeight:600,fontSize:13,cursor:"pointer"}}>Cancelar</button>
+          <button onClick={handleSave} disabled={!valid} style={{padding:"10px 24px",borderRadius:9,border:"none",background:valid?C.navy:C.light,color:"#fff",fontWeight:800,fontSize:14,cursor:valid?"pointer":"default"}}>
+            Guardar cliente →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MisClientes({clientes=[], muestras=[], recuperaciones=[], reportes=[], onOpenFicha, usuario, onClienteCreado}){
   const [q,setQ]=useState("");
   const [filtroEquipo,setFiltroEquipo]=useState("todos");
+  const [showNuevo,setShowNuevo]=useState(false);
 
   const filtered=clientes.filter(c=>{
     const matchQ=!q||c.nombre.toLowerCase().includes(q.toLowerCase())||c.codigoERP?.includes(q);
@@ -4115,12 +4501,20 @@ function MisClientes({clientes=[], muestras=[], recuperaciones=[], reportes=[], 
 
   return(
     <div>
-      {/* Buscador */}
+      {showNuevo&&usuario&&<NuevoClienteForm usuario={usuario} onSave={c=>onClienteCreado&&onClienteCreado(c)} onClose={()=>setShowNuevo(false)}/>}
+
+      {/* Buscador + botón nuevo */}
       <div style={{position:"sticky",top:0,background:C.bg,paddingBottom:12,zIndex:5}}>
-        <div style={{position:"relative",marginBottom:8}}>
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Buscar cliente…"
-            style={{...iSt,paddingLeft:16,borderRadius:12,fontSize:14,padding:"12px 16px"}}/>
-          {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:18}}>×</button>}
+        <div style={{display:"flex",gap:8,marginBottom:8}}>
+          <div style={{position:"relative",flex:1}}>
+            <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Buscar cliente…"
+              style={{...iSt,paddingLeft:16,borderRadius:12,fontSize:14,padding:"12px 16px",width:"100%"}}/>
+            {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:18}}>×</button>}
+          </div>
+          <button onClick={()=>setShowNuevo(true)}
+            style={{padding:"0 18px",borderRadius:12,border:"none",background:C.navy,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:18}}>+</span> Nuevo cliente
+          </button>
         </div>
         {equipos.length>1&&(
           <div style={{display:"flex",gap:6}}>
@@ -6889,8 +7283,20 @@ function App(){
   const [section,setSection]=useState("dashboard");
   const [nominasSubidas,setNominasSubidas]=useState({});
   const [clientesDB,setClientesDB]=useState(CLIENTES);
+
+  // ── Cargar clientes desde Firebase ──────────────────────────────
+  useEffect(()=>{
+    if(!window.fbObtener) return;
+    window.fbObtener('clientes').then(data=>{
+      if(data&&data.length>0){
+        setClientesDB(data);
+        console.log(`✓ ${data.length} clientes cargados desde Firebase`);
+      }
+    }).catch(e=>console.warn('Error cargando clientes:',e));
+  },[]);
   const [objetivosDB,setObjetivosDB]=useState({});
   const [historialDB,setHistorialDB]=useState([]);
+  const [respConfig,setRespConfig]=useState({}); // responsables por departamento
   const [incidencias,setIncidencias]=useState(INITIAL_INC);
   const [recuperaciones,setRecuperaciones]=useState([]);
   const [muestrasPendientes,setMuestrasPendientes]=useState([
@@ -6931,16 +7337,61 @@ function App(){
     ],muestras:[],recuperaciones:[],clientes:[]},
   ]);
 
+  // ── Carga inicial desde Firebase (todas las colecciones) ─────────
   useEffect(()=>{
-    try{
-      const rec=localStorage.getItem('crm_recuperaciones');
-      const mue=localStorage.getItem('crm_muestras');
-      const inc=localStorage.getItem('crm_incidencias');
-      if(rec)setRecuperaciones(JSON.parse(rec));
-      if(mue)setMuestrasPendientes(JSON.parse(mue));
-      if(inc)setIncidencias(JSON.parse(inc));
-    }catch(e){}
+    if(!window.fbObtener) return;
+    // Reportes
+    window.fbObtener('reportes').then(data=>{
+      if(data&&data.length>0) setReportesSem(prev=>{
+        const demoPrev=prev.filter(r=>r._demo);
+        const fbData=data.filter(r=>!demoPrev.find(d=>d.agente===r.agente&&d.semana===r.semana));
+        return [...data,...demoPrev.filter(d=>!data.find(r=>r.agente===d.agente&&r.semana===d.semana))];
+      });
+    }).catch(()=>{});
+    // Muestras
+    window.fbObtener('muestras').then(data=>{
+      if(data&&data.length>0) setMuestrasPendientes(data);
+    }).catch(()=>{});
+    // Recuperaciones
+    window.fbObtener('recuperaciones').then(data=>{
+      if(data&&data.length>0) setRecuperaciones(data);
+    }).catch(()=>{});
+    // Incidencias
+    window.fbObtener('incidencias').then(data=>{
+      if(data&&data.length>0) setIncidencias(data);
+    }).catch(()=>{});
+    // Objetivos
+    window.fbObtener('objetivos').then(data=>{
+      if(data&&data.length>0){
+        const obj={};
+        data.forEach(d=>{obj[d.agente]=obj[d.agente]||[];obj[d.agente].push(d);});
+        setObjetivosDB(obj);
+      }
+    }).catch(()=>{});
+    // Nominas
+    window.fbObtener('nominas').then(data=>{
+      if(data&&data.length>0){
+        const noms={};
+        data.forEach(d=>{noms[d.uid]=noms[d.uid]||[];noms[d.uid].push(d);});
+        setNominasSubidas(noms);
+      }
+    }).catch(()=>{});
+    // Historial notas rápidas
+    window.fbObtener('historial').then(data=>{
+      if(data&&data.length>0) setHistorialDB(data);
+    }).catch(()=>{});
+    // Responsables dpto config
+    window.fbObtener('config',[[['id','==','responsables']]]).then(data=>{
+      if(data&&data.length>0){
+        const cfg={...data[0]};delete cfg.id;
+        setRespConfig(cfg);
+        RESP_CONFIG_GLOBAL=cfg;
+      }
+    }).catch(()=>{});
+    console.log('✅ Carga Firebase iniciada — todas las colecciones');
   },[]);
+
+  // ── Backup localStorage (por si hay problemas de red) ─────────────
   useEffect(()=>{try{localStorage.setItem('crm_recuperaciones',JSON.stringify(recuperaciones));}catch(e){}},[recuperaciones]);
   useEffect(()=>{try{localStorage.setItem('crm_muestras',JSON.stringify(muestrasPendientes));}catch(e){}},[muestrasPendientes]);
   useEffect(()=>{try{localStorage.setItem('crm_incidencias',JSON.stringify(incidencias));}catch(e){}},[incidencias]);
@@ -7014,6 +7465,8 @@ function App(){
         const existing=prev[uid]||[];
         const merged=[...noms,...existing.filter(e=>!noms.some(n=>`${n.mes}-${n.año}`===`${e.mes}-${e.año}`))];
         next[uid]=merged;
+        // Guardar en Firebase
+        if(window.fbGuardar) noms.forEach(n=>window.fbGuardar('nominas',`${uid}_${n.mes}_${n.año}`,{...n,uid}));
       });
       return next;
     });
@@ -7023,6 +7476,10 @@ function App(){
   const navForRole=()=>{
     if(session.rol==="rrhh") return [];
     if(session.rol==="admin") return [{id:"usuarios",icon:IC.users,label:"Usuarios"},{id:"datos",icon:IC.db,label:"Datos"},{id:"admin",icon:IC.gear,label:"Configuración"}];
+    if(session.rol==="responsable") return [
+      {id:"dashboard",icon:IC.home,label:"Dashboard"},
+      {id:"incidencias",icon:IC.warn,label:"Mis incidencias"},
+    ];
     const base=[
       {id:"dashboard",icon:IC.home,label:"Dashboard"},
       {id:"reporting",icon:IC.clip,label:"Reporting"},
@@ -7050,14 +7507,19 @@ function App(){
       recuperaciones={recuperaciones}
       onBack={()=>setFichaClienteId(null)}
       onAddNota={(cli,nota)=>{
-        // Save quick note as a visit entry in a synthetic report
         const syntheticRep={
           agente:usuario.id, semana:nota.semana,
           enviado:true, ts:nota.ts,
           visitas:[{clienteId:cli.id,clienteNombre:cli.nombre,resultado:nota.resultado,notas:nota.texto}],
           muestras:[],recuperaciones:[],clientes:[]
         };
+        const repId=`${usuario.id}_S${nota.semana}_nota_${Date.now()}`;
+        if(window.fbGuardar) window.fbGuardar('reportes', repId, syntheticRep);
+        // También en historial para timeline rápido
+        const notaDoc={id:repId,clienteId:cli.id,clienteNombre:cli.nombre,agente:usuario.id,semana:nota.semana,ts:nota.ts,resultado:nota.resultado,texto:nota.texto,tipo:'nota_rapida'};
+        if(window.fbGuardar) window.fbGuardar('historial', repId, notaDoc);
         setReportesSem(p=>[syntheticRep,...p]);
+        setHistorialDB(p=>[...p,notaDoc]);
       }}/>;
     if(session.rol==="rrhh")      return <RRHHPortal nominasSubidas={nominasSubidas} onPublicar={handlePublicar}/>;
     if(section==="usuarios")      return <AdminUsers users={users} onUpdate={setUsers}/>;
@@ -7066,17 +7528,19 @@ function App(){
     if(section==="clientes")      return <MisClientes
       clientes={clientesDB.filter(c=>session.rol==="agente"?c.agente===usuario.id:session.rol==="jefe"?VENDEDORES.find(v=>v.id===c.agente)?.equipo===usuario.equipo:true)}
       muestras={muestrasPendientes} recuperaciones={recuperaciones} reportes={reportesSem}
-      onOpenFicha={setFichaClienteId}/>;
+      onOpenFicha={setFichaClienteId}
+      usuario={usuario}
+      onClienteCreado={c=>setClientesDB(p=>[c,...p])}/>;
     if(section==="estadisticas")  return <Estadisticas usuario={usuario}/>;
-    if(section==="incidencias")   return <Incidencias usuario={usuario} incidencias={incidencias} onAdd={addInc} onUpdate={updInc}/>;
+    if(section==="incidencias")   return <Incidencias usuario={usuario} incidencias={incidencias} onAdd={addInc} onUpdate={updInc} respConfig={respConfig}/>;
     if(section==="recuperacion")  return <Recuperacion usuario={usuario} recuperaciones={recuperaciones} onAdd={addRec} onUpdate={updRec}/>;
     if(section==="muestras-historial") return <HistorialProductosMuestra
       muestras={["agente","jefe"].includes(session.rol)
         ? muestrasPendientes.filter(m=>session.rol==="agente"?m.agente===usuario.id:VENDEDORES.find(v=>v.id===m.agente)?.equipo===usuario.equipo)
         : muestrasPendientes}/>;
     if(section==="nominas")       return <Nominas key={`nom-${session.uid}`} usuario={usuario} nominasData={getNominasUsuario(session.uid)}/>;
-    if(section==="datos")         return <DatosAdmin usuario={usuario} clientes={clientesDB} setClientes={setClientesDB} objetivos={objetivosDB} setObjetivos={setObjetivosDB} historial={historialDB} setHistorial={setHistorialDB} onOpenCliente={setFichaClienteId}/>;
-    if(section==="admin")         return <Admin usuario={usuario}/>;
+    if(section==="datos")         return <DatosAdmin usuario={usuario} clientes={clientesDB} setClientes={setClientesDB} objetivos={objetivosDB} setObjetivos={(obj)=>{setObjetivosDB(obj);if(window.fbGuardar){Object.entries(obj).forEach(([agente,sems])=>sems.forEach(s=>window.fbGuardar('objetivos',`${agente}_S${s.semana}`,{...s,agente})));} }} historial={historialDB} setHistorial={(h)=>{setHistorialDB(h);if(window.fbGuardar&&h.length>0){const last=h[h.length-1];window.fbGuardar('historial',last.id||String(Date.now()),last);}}} onOpenCliente={setFichaClienteId}/>;
+    if(section==="admin")         return <div><Admin usuario={usuario}/><div style={{marginTop:24}}><ConfigResponsables respConfig={respConfig} setRespConfig={r=>{setRespConfig(r);RESP_CONFIG_GLOBAL=r;}}/></div></div>;
     return null;
   };
 
