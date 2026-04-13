@@ -18,7 +18,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script>
-    firebase.initializeApp({
+    const app = firebase.initializeApp({
       apiKey:"AIzaSyA0H_yllcuPvXmeV2NJSlsOsA9nb62HIPU",
       authDomain:"grupo-consolidado-crm.firebaseapp.com",
       projectId:"grupo-consolidado-crm",
@@ -26,10 +26,21 @@
       messagingSenderId:"402285987115",
       appId:"1:402285987115:web:3685ad668ca5521e85f16e"
     });
-    const db=firebase.firestore();
-    window.fbGuardar=async(col,id,datos)=>{try{await db.collection(col).doc(String(id)).set(datos,{merge:true});return true;}catch(e){return false;}};
-    window.fbObtener=async(col)=>{try{const snap=await db.collection(col).get();return snap.docs.map(d=>({id:d.id,...d.data()}));}catch(e){return[];}};
-    console.log('Firebase OK');
+    // Exponer db globalmente para acceso directo desde React
+    window.db = firebase.firestore();
+    window.fbGuardar = async(col,id,datos)=>{
+      try{await window.db.collection(col).doc(String(id)).set(datos,{merge:true});return true;}
+      catch(e){console.warn('FB write error:',col,id,e.message);return false;}
+    };
+    window.fbObtener = async(col)=>{
+      try{
+        const snap = await window.db.collection(col).get();
+        const docs = snap.docs.map(d=>({id:d.id,...d.data()}));
+        console.log('Firebase load:',col,docs.length,'docs');
+        return docs;
+      }catch(e){console.warn('FB read error:',col,e.message);return[];}
+    };
+    console.log('✅ Firebase inicializado — grupo-consolidado-crm');
   </script>
   <script src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js"></script>
@@ -7305,16 +7316,22 @@ function App(){
   const [section,setSection]=useState("dashboard");
   const [nominasSubidas,setNominasSubidas]=useState({});
   const [clientesDB,setClientesDB]=useState(CLIENTES);
+  const [clientesCargados,setClientesCargados]=useState(false);
 
   // ── Cargar clientes desde Firebase ──────────────────────────────
   useEffect(()=>{
-    if(!window.fbObtener) return;
-    window.fbObtener('clientes').then(data=>{
-      if(data&&data.length>0){
+    if(!window.db) return; // Firebase no disponible
+    window.db.collection('clientes').get().then(snap=>{
+      const data=snap.docs.map(d=>({id:d.id,...d.data()}));
+      if(data.length>0){
         setClientesDB(data);
-        console.log(`✓ ${data.length} clientes cargados desde Firebase`);
+        console.log(`✓ ${data.length} clientes cargados`);
       }
-    }).catch(e=>console.warn('Error cargando clientes:',e));
+      setClientesCargados(true);
+    }).catch(e=>{
+      console.warn('Error clientes:',e.message);
+      setClientesCargados(true);
+    });
   },[]);
   const [objetivosDB,setObjetivosDB]=useState({});
   const [historialDB,setHistorialDB]=useState([]);
