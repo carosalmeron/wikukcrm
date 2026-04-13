@@ -4911,7 +4911,43 @@ function App(){
   const [historialDB,setHistorialDB]=useState([]);
   const [incidencias,setIncidencias]=useState(INITIAL_INC);
   const [recuperaciones,setRecuperaciones]=useState([]);
-  const [muestrasPendientes,setMuestrasPendientes]=useState([]);
+  const [muestrasPendientes,setMuestrasPendientes]=useState([
+    {id:"mp1",prodCodigo:"500060",prodNombre:"Ajo Deshidratado Nacional B.1KG",tipo:"Ingredientes",cantidad:2,clienteNombre:"MARIANO CAMPOS PEREZ",agente:"wk1",semana:13,estado:"positivo",nota:"Le encanta. Quiere pedido mensual en formato 25KG."},
+    {id:"mp2",prodCodigo:"500120",prodNombre:"Burger Meet Clásico B.5KG",tipo:"Ingredientes",cantidad:3,clienteNombre:"INDUSTRIAS CARNICAS DE MONACHIL S.L.",agente:"wk1",semana:14,estado:"pendiente",nota:""},
+    {id:"mp3",prodCodigo:"500445",prodNombre:"Especias Pollo a l'Ast B.1KG",tipo:"Ingredientes",cantidad:1,clienteNombre:"JORGE LOPEZ MORON",agente:"wk1",semana:14,estado:"pendiente",nota:""},
+    {id:"mp4",prodCodigo:"500060",prodNombre:"Ajo Deshidratado Nacional B.1KG",tipo:"Ingredientes",cantidad:2,clienteNombre:"CARLOS MORENO CONTRERAS",agente:"ik1",semana:13,estado:"pedido",nota:"Pedido de 50kg. Gran éxito en su obrador."},
+    {id:"mp5",prodCodigo:"WE0049.1",prodNombre:"Pimentón Dulce 140 Astas B.1KG",tipo:"Ingredientes",cantidad:2,clienteNombre:"GABRIEL CASTAÑO, S.L.",agente:"ik1",semana:14,estado:"pendiente",nota:""},
+    {id:"mp6",prodCodigo:"500340",prodNombre:"Preparado Longaniza Ibérica",tipo:"Ingredientes",cantidad:3,clienteNombre:"FRANCISCO J. TORNAY VIÑAS",agente:"wk2",semana:13,estado:"ko",nota:"Demasiado especiado para su clientela."},
+    {id:"mp7",prodCodigo:"500201",prodNombre:"Preparado Kebab Mix B.3KG",tipo:"Ingredientes",cantidad:2,clienteNombre:"CARNES ORPRI SLU",agente:"wk2",semana:14,estado:"pendiente",nota:""},
+    {id:"mp8",prodCodigo:"WE0056.1",prodNombre:"Pimienta Blanca Molida B.1KG",tipo:"Ingredientes",cantidad:1,clienteNombre:"ARUMI CASTELLS, S.L.",agente:"wk3",semana:14,estado:"pendiente",nota:""},
+    {id:"mp9",prodCodigo:"500089",prodNombre:"Deshidratada Cerdo Selecta 500G",tipo:"Deshidratada",cantidad:2,clienteNombre:"NAVARRO DOMINGUEZ, JUAN",agente:"wk3",semana:13,estado:"positivo",nota:"Muy buena textura. Interesado en pedido regular."},
+    {id:"mp10",prodCodigo:"WE0091.1",prodNombre:"Pimentón Ahumado B.1KG",tipo:"Ingredientes",cantidad:2,clienteNombre:"JAMON Y SALUD SA",agente:"ik1",semana:12,estado:"pedido",nota:"Ha pedido 20kg para su línea de chorizo ahumado."},
+  ]);
+  const [reportesSem,setReportesSem]=useState([
+    {agente:"wk1",semana:15,enviado:true,ts:"14/04/2026",visitas:[
+      {clienteId:"C0101",clienteNombre:"MARIANO CAMPOS PEREZ",resultado:"nuevo_pedido",notas:"Visita muy positiva. Cerrado pedido de 150kg Pimentón Dulce 140 Astas y 80kg Pimienta Negra Molida. Me pide que le presente la gama CTH en la próxima visita."},
+      {clienteId:"C0102",clienteNombre:"INDUSTRIAS CARNICAS DE MONACHIL S.L.",resultado:"visitado",notas:"Reunión con el responsable de compras. Interesado en Ajo Granulado China formato 25KG. Quedamos el jueves para cerrar precio."},
+      {clienteId:"C0103",clienteNombre:"JORGE LOPEZ MORON",resultado:"llamada",notas:"Llamada para confirmar recepción del pedido. Todo correcto. Pregunta por disponibilidad del Pimentón Ahumado para su chorizo especial de verano."},
+    ],muestras:[],recuperaciones:[],clientes:[]},
+    {agente:"wk1",semana:14,enviado:true,ts:"07/04/2026",visitas:[
+      {clienteId:"C0101",clienteNombre:"MARIANO CAMPOS PEREZ",resultado:"visitado",notas:"Segunda visita del mes. Revisamos consumo del trimestre. Está rotando muy bien el Ajo Deshidratado de la muestra. Preparando presupuesto para pedido mensual."},
+      {clienteId:"C0102",clienteNombre:"INDUSTRIAS CARNICAS DE MONACHIL S.L.",resultado:"no_disponible",notas:"El director estaba en feria del sector. Dejé catálogo y tarjeta con la recepcionista. Vuelvo la próxima semana."},
+      {clienteId:"C0103",clienteNombre:"JORGE LOPEZ MORON",resultado:"visitado",notas:"Presenté la nueva gama de Tripas Naturales. Muy interesado en tripa de cordero. Le dejé muestras formato B.100M para que pruebe esta semana."},
+    ],muestras:[],recuperaciones:[],clientes:[]},
+    {agente:"wk1",semana:13,enviado:true,ts:"31/03/2026",visitas:[
+      {clienteId:"C0101",clienteNombre:"MARIANO CAMPOS PEREZ",resultado:"llamada",notas:"Llamada de seguimiento. Confirma que la muestra de Ajo Deshidratado ha funcionado muy bien. Quiere ampliar a formato 25KG. Le envío oferta por email."},
+      {clienteId:"C0103",clienteNombre:"JORGE LOPEZ MORON",resultado:"no_compra",notas:"No quiso avanzar. Tiene stock hasta verano y su proveedor bajó precio. Vuelvo en junio con nueva oferta."},
+    ],muestras:[],recuperaciones:[],clientes:[]},
+    {agente:"ik1",semana:15,enviado:true,ts:"14/04/2026",visitas:[
+      {clienteId:"C0001",clienteNombre:"CARLOS MORENO CONTRERAS",resultado:"nuevo_pedido",notas:"Pedido de 300kg especias mixtas para elaboración chorizo ibérico temporada verano. Muy satisfecho con el servicio. Habla de ampliar con la gama CTH."},
+      {clienteId:"C0002",clienteNombre:"GABRIEL CASTAÑO, S.L.",resultado:"visitado",notas:"Visita de mantenimiento. Consumo Q1 correcto. Abre nueva línea de producción en septiembre y necesitará más volumen."},
+      {clienteId:"C0003",clienteNombre:"JAMON Y SALUD SA",resultado:"llamada",notas:"Confirmada entrega semana pasada. Sin incidencias. Pregunta disponibilidad Pimentón de La Vera. Confirmo con almacén."},
+    ],muestras:[],recuperaciones:[],clientes:[]},
+    {agente:"wk2",semana:15,enviado:true,ts:"14/04/2026",visitas:[
+      {clienteId:"C0126",clienteNombre:"FRANCISCO J. TORNAY VIÑAS",resultado:"visitado",notas:"Presentación nuevos formatos B.5KG especias. Interesado en Pimentón Dulce para reducir costes. Hace pedido de prueba de 10 bolsas."},
+      {clienteId:"C0127",clienteNombre:"CARNES ORPRI SLU",resultado:"nuevo_pedido",notas:"Renovación contrato anual. Pedido marco por 2.000kg de especias en 12 entregas. Gran cliente consolidado."},
+    ],muestras:[],recuperaciones:[],clientes:[]},
+  ]);
 
   useEffect(()=>{
     try{
@@ -4926,6 +4962,19 @@ function App(){
   useEffect(()=>{try{localStorage.setItem('crm_recuperaciones',JSON.stringify(recuperaciones));}catch(e){}},[recuperaciones]);
   useEffect(()=>{try{localStorage.setItem('crm_muestras',JSON.stringify(muestrasPendientes));}catch(e){}},[muestrasPendientes]);
   useEffect(()=>{try{localStorage.setItem('crm_incidencias',JSON.stringify(incidencias));}catch(e){}},[incidencias]);
+
+  const saveReporte=(rep)=>{
+    setMuestrasPendientes(prev=>{
+      const nuevas=(rep.muestras||[]).filter(m=>!prev.find(p=>p.id===m.id));
+      const updated=prev.map(p=>{const fb=(rep.feedbackMuestras||[]).find(f=>f.id===p.id);return fb?{...p,...fb}:p;});
+      return [...updated,...nuevas.map(m=>({...m,agente:rep.agente,estado:"pendiente"}))];
+    });
+    setReportesSem(p=>[rep,...p.filter(r=>!(r.agente===rep.agente&&r.semana===rep.semana))]);
+  };
+  const addInc=i=>setIncidencias(p=>[i,...p]);
+  const updInc=i=>setIncidencias(p=>p.map(x=>x.id===i.id?i:x));
+  const addRec=r=>setRecuperaciones(p=>[r,...p]);
+  const updRec=r=>setRecuperaciones(p=>p.map(x=>x.id===r.id?r:x));
 
   const handleLogin=(user)=>{
     setSession(user);
