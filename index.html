@@ -15,7 +15,6 @@
 </head>
 <body>
   <div id="root"></div>
-
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script>
@@ -28,7 +27,7 @@
       appId:"1:402285987115:web:3685ad668ca5521e85f16e"
     });
     const db=firebase.firestore();
-    window.fbGuardar=async(col,id,datos)=>{try{await db.collection(col).doc(String(id)).set(datos,{merge:true});return true;}catch(e){console.warn('FB:',e.message);return false;}};
+    window.fbGuardar=async(col,id,datos)=>{try{await db.collection(col).doc(String(id)).set(datos,{merge:true});return true;}catch(e){return false;}};
     window.fbObtener=async(col,filtros)=>{try{let q=db.collection(col);if(filtros)filtros.forEach(f=>q=q.where(f[0],f[1],f[2]));const snap=await q.get();return snap.docs.map(d=>({id:d.id,...d.data()}));}catch(e){return[];}};
     window.fbEscuchar=(col,cb,filtros)=>{try{let q=db.collection(col);if(filtros)filtros.forEach(f=>q=q.where(f[0],f[1],f[2]));return q.onSnapshot(snap=>cb(snap.docs.map(d=>({id:d.id,...d.data()}))));} catch(e){return()=>{};}};
     console.log('✅ Firebase conectado');
@@ -3183,118 +3182,101 @@ const PERFILES = [
 ];
 
 function LoginScreen({onLogin}){
+  const [user,setUser]=useState("");
+  const [pass,setPass]=useState("");
+  const [error,setError]=useState("");
+  const [loading,setLoading]=useState(false);
+  const [showPass,setShowPass]=useState(false);
+
+  const handleSubmit=()=>{
+    if(!user.trim()||!pass.trim()){setError("Introduce usuario y contraseña");return;}
+    setLoading(true);setError("");
+    setTimeout(()=>{
+      // Buscar en USERS_INITIAL
+      const found=USERS_INITIAL.find(u=>
+        u.username?.toLowerCase()===user.trim().toLowerCase() && u.password===pass.trim()
+      );
+      if(found){
+        onLogin(found);
+      } else {
+        setError("Usuario o contraseña incorrectos");
+        setLoading(false);
+      }
+    },400);
+  };
+
   const BG="#EFEDE8";
-  const SHADOW="0 2px 20px rgba(0,0,0,0.07)";
   const NARANJA="#C2622D";
 
-  const [adminMode,setAdminMode]=useState(false);
-  const [adminPass,setAdminPass]=useState("");
-  const [adminError,setAdminError]=useState(false);
-
-  const handleSelect=(perfil)=>{
-    onLogin({id:`u-${perfil.uid}`,uid:perfil.uid,username:perfil.uid,nombre:perfil.nombre,rol:perfil.rol,equipo:perfil.equipo,activo:true});
-  };
-
-  const handleAdminLogin=()=>{
-    if(adminPass==="admin1234"){
-      onLogin({id:"u-adm",uid:"adm",username:"admin",nombre:"Administrador",rol:"admin",equipo:null,activo:true});
-    } else {
-      setAdminError(true);
-      setTimeout(()=>setAdminError(false),1500);
-    }
-  };
-
-  // ── PANTALLA ADMIN (estilo Wikuk) ──────────────────────────────
-  if(adminMode){
-    return(
-      <div style={{minHeight:"100vh",background:BG,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans','Helvetica Neue',sans-serif",padding:32}}>
-        <span style={{fontSize:48,marginBottom:16}}>🔐</span>
-        <p style={{margin:"0 0 6px",fontSize:22,fontWeight:800,color:"#111"}}>Zona Administrador</p>
-        <p style={{margin:"0 0 32px",fontSize:13,color:"#9CA3AF"}}>Introduce tu clave de acceso</p>
-
-        <div style={{width:"100%",maxWidth:360}}>
-          <input type="password" value={adminPass} onChange={e=>{setAdminPass(e.target.value);setAdminError(false);}}
-            onKeyDown={e=>e.key==="Enter"&&handleAdminLogin()}
-            placeholder="••••••••" autoFocus
-            style={{width:"100%",padding:"16px 20px",borderRadius:12,border:`2px solid ${adminError?"#DC2626":NARANJA}`,background:"#FFF",fontSize:18,textAlign:"center",letterSpacing:"0.2em",boxSizing:"border-box",fontFamily:"inherit",outline:"none",
-              animation:adminError?"shake .4s":"none"}}/>
-
-          {adminError&&<p style={{margin:"8px 0 0",fontSize:12,color:"#DC2626",textAlign:"center",fontWeight:600}}>Clave incorrecta</p>}
-
-          <button onClick={handleAdminLogin} style={{width:"100%",marginTop:16,padding:"16px",borderRadius:12,border:"none",background:"#111",color:"#FFF",fontWeight:700,fontSize:16,cursor:"pointer"}}>
-            Entrar
-          </button>
-          <button onClick={()=>{setAdminMode(false);setAdminPass("");setAdminError(false);}}
-            style={{width:"100%",marginTop:10,padding:"12px",borderRadius:12,border:"none",background:"transparent",color:"#9CA3AF",fontWeight:500,fontSize:14,cursor:"pointer"}}>
-            Cancelar
-          </button>
-        </div>
-
-        <style>{`@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}`}</style>
-      </div>
-    );
-  }
-
-  // ── SELECTOR DE PERFIL ─────────────────────────────────────────
-  const grupos=[
-    {label:"Dirección",   items:PERFILES.filter(p=>["ceo","director"].includes(p.rol))},
-    {label:"Responsables",items:PERFILES.filter(p=>p.rol==="jefe")},
-    {label:"Equipo WIKUK",items:PERFILES.filter(p=>p.rol==="agente"&&p.equipo==="WIKUK")},
-    {label:"Equipo INTERKEY",items:PERFILES.filter(p=>p.rol==="agente"&&p.equipo==="INTERKEY")},
-    {label:"Soporte",     items:PERFILES.filter(p=>p.rol==="rrhh")},
-  ];
-
   return(
-    <div style={{minHeight:"100vh",background:BG,fontFamily:"'DM Sans','Helvetica Neue',sans-serif",padding:"32px 20px 60px"}}>
+    <div style={{minHeight:"100vh",background:BG,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans','Helvetica Neue',sans-serif",padding:24}}>
+
       {/* Logo */}
       <div style={{textAlign:"center",marginBottom:36}}>
-        <p style={{margin:0,fontSize:34,fontWeight:900,letterSpacing:"-0.02em",lineHeight:1}}>
-          <span style={{color:"#111"}}>GRU</span><span style={{color:"#1A5FD4"}}>PO</span>
+        <p style={{margin:"0 0 6px",fontSize:38,fontWeight:900,letterSpacing:"-0.03em",lineHeight:1}}>
+          <span style={{color:"#111"}}>GRU</span><span style={{color:C.blue}}>PO</span><br/>
+          <span style={{color:"#111"}}>CON</span><span style={{color:C.blue}}>SOLIDADO</span>
         </p>
-        <p style={{margin:0,fontSize:34,fontWeight:900,letterSpacing:"-0.02em",lineHeight:1}}>
-          <span style={{color:"#111"}}>CONSO</span><span style={{color:"#1A5FD4"}}>LIDADO</span>
-        </p>
-        <p style={{margin:"8px 0 0",fontSize:11,fontWeight:700,color:"#B0A9A2",letterSpacing:"0.18em",textTransform:"uppercase"}}>
-          Selecciona tu perfil
-        </p>
+        <p style={{margin:"10px 0 0",fontSize:12,fontWeight:700,letterSpacing:"0.12em",color:"#9CA3AF",textTransform:"uppercase"}}>Acceso al sistema</p>
       </div>
 
-      {/* Grupos */}
-      <div style={{maxWidth:520,margin:"0 auto"}}>
-        {grupos.filter(g=>g.items.length>0).map(g=>(
-          <div key={g.label} style={{marginBottom:20}}>
-            <p style={{margin:"0 0 10px 2px",fontSize:10,fontWeight:700,color:"#B0A9A2",letterSpacing:"0.12em",textTransform:"uppercase"}}>{g.label}</p>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
-              {g.items.map(p=>(
-                <button key={p.uid} onClick={()=>handleSelect(p)}
-                  style={{display:"flex",gap:14,alignItems:"center",padding:"13px 18px",background:"#FFF",borderRadius:13,border:"none",cursor:"pointer",boxShadow:SHADOW,textAlign:"left",width:"100%",transition:"transform .12s"}}
-                  onMouseEnter={e=>e.currentTarget.style.transform="translateY(-1px)"}
-                  onMouseLeave={e=>e.currentTarget.style.transform="none"}>
-                  <div style={{width:40,height:40,borderRadius:"50%",background:p.color+"18",border:`2px solid ${p.color}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:800,color:p.color,flexShrink:0}}>
-                    {p.nombre.split(" ").slice(0,2).map(n=>n[0]).join("")}
-                  </div>
-                  <div style={{flex:1}}>
-                    <p style={{margin:0,fontSize:14,fontWeight:700,color:"#111"}}>{p.nombre}</p>
-                    <p style={{margin:"1px 0 0",fontSize:11,color:"#9CA3AF"}}>{p.cargo}{p.equipo?` · ${p.equipo}`:""}</p>
-                  </div>
-                  <span style={{color:"#D1D5DB",fontSize:18}}>›</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
+      {/* Formulario */}
+      <div style={{background:"#FFF",borderRadius:18,padding:"28px 28px 24px",width:"100%",maxWidth:380,boxShadow:"0 4px 32px #0001"}}>
 
-        {/* Zona Admin — estilo Wikuk */}
-        <div style={{marginTop:8,textAlign:"center"}}>
-          <button onClick={()=>setAdminMode(true)}
-            style={{display:"inline-flex",gap:7,alignItems:"center",background:"none",border:"none",cursor:"pointer",color:"#B0A9A2",fontSize:12,padding:"8px 16px",borderRadius:8}}>
-            <span>🔐</span> Zona Administrador
-          </button>
+        {/* Usuario */}
+        <div style={{marginBottom:14}}>
+          <p style={{margin:"0 0 6px",fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.06em"}}>Usuario</p>
+          <input
+            value={user} onChange={e=>{setUser(e.target.value);setError("");}}
+            onKeyDown={e=>e.key==="Enter"&&document.getElementById("crm-pass-input").focus()}
+            placeholder="Ej: davidmag, carlosg..."
+            autoComplete="username"
+            style={{width:"100%",padding:"12px 14px",borderRadius:10,border:`1.5px solid ${error?C.red:C.border}`,fontSize:14,outline:"none",boxSizing:"border-box",background:"#FAFAFA"}}
+          />
         </div>
+
+        {/* Contraseña */}
+        <div style={{marginBottom:20}}>
+          <p style={{margin:"0 0 6px",fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:"0.06em"}}>Contraseña</p>
+          <div style={{position:"relative"}}>
+            <input
+              id="crm-pass-input"
+              type={showPass?"text":"password"}
+              value={pass} onChange={e=>{setPass(e.target.value);setError("");}}
+              onKeyDown={e=>e.key==="Enter"&&handleSubmit()}
+              placeholder="••••••"
+              autoComplete="current-password"
+              style={{width:"100%",padding:"12px 42px 12px 14px",borderRadius:10,border:`1.5px solid ${error?C.red:C.border}`,fontSize:14,outline:"none",boxSizing:"border-box",background:"#FAFAFA"}}
+            />
+            <button onClick={()=>setShowPass(s=>!s)}
+              style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:16,lineHeight:1}}>
+              {showPass?"🙈":"👁"}
+            </button>
+          </div>
+        </div>
+
+        {/* Error */}
+        {error&&(
+          <div style={{background:"#FEF2F2",border:`1px solid #FECACA`,borderRadius:8,padding:"9px 13px",marginBottom:14}}>
+            <p style={{margin:0,fontSize:13,color:C.red,fontWeight:600}}>⚠ {error}</p>
+          </div>
+        )}
+
+        {/* Botón */}
+        <button onClick={handleSubmit} disabled={loading}
+          style={{width:"100%",padding:"13px",borderRadius:11,border:"none",background:loading?C.muted:C.navy,color:"#FFF",fontWeight:800,fontSize:15,cursor:loading?"wait":"pointer",transition:"background .2s"}}>
+          {loading?"Verificando…":"Entrar →"}
+        </button>
       </div>
+
+      {/* Ayuda */}
+      <p style={{marginTop:20,fontSize:11,color:"#9CA3AF",textAlign:"center"}}>
+        ¿Problemas para acceder? Contacta con administración.
+      </p>
     </div>
   );
 }
+
 
 
 // ══════════════════════════════════════════════════════════════════
@@ -5288,6 +5270,8 @@ function App(){
 
   // ── fichaCliente must be declared BEFORE any conditional return ──
   const [fichaClienteId,setFichaClienteId]=useState(null);
+
+  // ── fichaCliente must be declared BEFORE any conditional return ──
 
   // Show login if not authenticated
   if(!session) return <LoginScreen onLogin={handleLogin}/>;
