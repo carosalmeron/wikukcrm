@@ -18,7 +18,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script>
-    const app = firebase.initializeApp({
+    firebase.initializeApp({
       apiKey:"AIzaSyA0H_yllcuPvXmeV2NJSlsOsA9nb62HIPU",
       authDomain:"grupo-consolidado-crm.firebaseapp.com",
       projectId:"grupo-consolidado-crm",
@@ -26,21 +26,18 @@
       messagingSenderId:"402285987115",
       appId:"1:402285987115:web:3685ad668ca5521e85f16e"
     });
-    // Exponer db globalmente para acceso directo desde React
     window.db = firebase.firestore();
     window.fbGuardar = async(col,id,datos)=>{
       try{await window.db.collection(col).doc(String(id)).set(datos,{merge:true});return true;}
-      catch(e){console.warn('FB write error:',col,id,e.message);return false;}
+      catch(e){console.warn('FB write:',col,e.message);return false;}
     };
     window.fbObtener = async(col)=>{
       try{
-        const snap = await window.db.collection(col).get();
-        const docs = snap.docs.map(d=>({id:d.id,...d.data()}));
-        console.log('Firebase load:',col,docs.length,'docs');
-        return docs;
-      }catch(e){console.warn('FB read error:',col,e.message);return[];}
+        const snap=await window.db.collection(col).get();
+        return snap.docs.map(d=>({id:d.id,...d.data()}));
+      }catch(e){console.warn('FB read:',col,e.message);return[];}
     };
-    console.log('✅ Firebase inicializado — grupo-consolidado-crm');
+    console.log('Firebase OK — grupo-consolidado-crm');
   </script>
   <script src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js"></script>
@@ -4492,15 +4489,14 @@ function NuevoClienteForm({usuario, onSave, onClose}){
   );
 }
 
-function MisClientes({clientes=[], muestras=[], recuperaciones=[], reportes=[], onOpenFicha, usuario, onClienteCreado}){
+function MisClientes({clientes=[], muestras=[], recuperaciones=[], reportes=[], onOpenFicha, usuario, onClienteCreado, cargando=false}){
   const [q,setQ]=useState("");
   const [filtroEquipo,setFiltroEquipo]=useState("todos");
   const [showNuevo,setShowNuevo]=useState(false);
 
   const filtered=clientes.filter(c=>{
     const matchQ=!q||c.nombre.toLowerCase().includes(q.toLowerCase())||c.codigoERP?.includes(q);
-    const matchEq=filtroEquipo==="todos"||c.equipo===filtroEquipo;
-    return matchQ&&matchEq;
+    return matchQ;
   });
 
   const getStats=(c)=>{
@@ -4517,6 +4513,14 @@ function MisClientes({clientes=[], muestras=[], recuperaciones=[], reportes=[], 
   return(
     <div>
       {showNuevo&&usuario&&<NuevoClienteForm usuario={usuario} onSave={c=>onClienteCreado&&onClienteCreado(c)} onClose={()=>setShowNuevo(false)}/>}
+
+      {/* Banner carga Firebase */}
+      {cargando&&(
+        <div style={{background:C.blueL,border:`1px solid ${C.blue}44`,borderRadius:10,padding:"10px 16px",marginBottom:12,display:"flex",gap:10,alignItems:"center"}}>
+          <span style={{fontSize:16}}>⏳</span>
+          <p style={{margin:0,fontSize:12,color:C.blue,fontWeight:600}}>Cargando clientes desde Firebase…</p>
+        </div>
+      )}
 
       {/* Buscador + botón nuevo */}
       <div style={{position:"sticky",top:0,background:C.bg,paddingBottom:12,zIndex:5}}>
@@ -7316,23 +7320,7 @@ function App(){
   const [section,setSection]=useState("dashboard");
   const [nominasSubidas,setNominasSubidas]=useState({});
   const [clientesDB,setClientesDB]=useState(CLIENTES);
-  const [clientesCargados,setClientesCargados]=useState(false);
-
-  // ── Cargar clientes desde Firebase ──────────────────────────────
-  useEffect(()=>{
-    if(!window.db) return; // Firebase no disponible
-    window.db.collection('clientes').get().then(snap=>{
-      const data=snap.docs.map(d=>({id:d.id,...d.data()}));
-      if(data.length>0){
-        setClientesDB(data);
-        console.log(`✓ ${data.length} clientes cargados`);
-      }
-      setClientesCargados(true);
-    }).catch(e=>{
-      console.warn('Error clientes:',e.message);
-      setClientesCargados(true);
-    });
-  },[]);
+  const [clientesCargando,setClientesCargando]=useState(false);
   const [objetivosDB,setObjetivosDB]=useState({});
   const [historialDB,setHistorialDB]=useState([]);
   const [respConfig,setRespConfig]=useState({}); // responsables por departamento
@@ -7451,10 +7439,28 @@ function App(){
 
   const handleLogin=(user)=>{
     setSession(user);
-    setModo(null); // show mode selector
+    setModo(null);
     if(user.rol==="rrhh")       setSection("rrhh");
     else if(user.rol==="admin") setSection("usuarios");
     else                        setSection("dashboard");
+
+    // Cargar clientes desde Firebase filtrados por rol
+    if(window.db){
+      setClientesCargando(true);
+      let query=window.db.collection('clientes');
+      const uid=user.uid||user.id;
+      if(user.rol==="agente")      query=query.where('agente','==',uid);
+      else if(user.rol==="jefe")   query=query.where('equipo','==',user.equipo);
+      // CEO, director, admin cargan todos (5431 docs)
+      query.get().then(snap=>{
+        const data=snap.docs.map(d=>({id:d.id,...d.data()}));
+        if(data.length>0){
+          setClientesDB(data);
+          console.log(`✓ ${data.length} clientes cargados para ${user.nombre} (${user.rol})`);
+        }
+        setClientesCargando(false);
+      }).catch(e=>{console.warn('Error clientes:',e.message);setClientesCargando(false);});
+    }
   };
   const handleLogout=()=>{setSession(null);setModo(null);setSection("dashboard");};
 
@@ -7565,7 +7571,8 @@ function App(){
     if(section==="dashboard")     return <Dashboard usuario={usuario} recuperaciones={recuperaciones} muestrasPendientes={muestrasPendientes} incidencias={incidencias} onNavigate={setSection}/>;
     if(section==="reporting")     return <Reporting usuario={usuario} reportes={reportesSem} onSaveReporte={saveReporte} objetivos={objetivosDB} recuperacionesAsignadas={recuperaciones} muestrasPendientes={muestrasPendientes.filter(m=>m.agente===usuario.id)} updRec={updRec} addRec={addRec} onOpenFicha={setFichaClienteId}/>;
     if(section==="clientes")      return <MisClientes
-      clientes={clientesDB.filter(c=>session.rol==="agente"?c.agente===usuario.id:session.rol==="jefe"?VENDEDORES.find(v=>v.id===c.agente)?.equipo===usuario.equipo:true)}
+      clientes={clientesDB}
+      cargando={clientesCargando}
       muestras={muestrasPendientes} recuperaciones={recuperaciones} reportes={reportesSem}
       onOpenFicha={setFichaClienteId}
       usuario={usuario}
