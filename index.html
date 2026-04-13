@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <meta name="theme-color" content="#0C1A29"/>
-  <title>CRM Grupo Consolidado</title>
+  <title>Grupo Consolidado</title>
   <style>
     *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
     body{font-family:'DM Sans','Helvetica Neue',Arial,sans-serif;background:#F4F6F9;-webkit-font-smoothing:antialiased}
@@ -15,6 +15,24 @@
 </head>
 <body>
   <div id="root"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+  <script>
+    firebase.initializeApp({
+      apiKey:"AIzaSyA0H_yllcuPvXmeV2NJSlsOsA9nb62HIPU",
+      authDomain:"grupo-consolidado-crm.firebaseapp.com",
+      projectId:"grupo-consolidado-crm",
+      storageBucket:"grupo-consolidado-crm.firebasestorage.app",
+      messagingSenderId:"402285987115",
+      appId:"1:402285987115:web:3685ad668ca5521e85f16e"
+    });
+    const db=firebase.firestore();
+    window.fbGuardar=async(col,id,datos)=>{try{await db.collection(col).doc(String(id)).set(datos,{merge:true});return true;}catch(e){console.warn('FB:',e.message);return false;}};
+    window.fbObtener=async(col,filtros)=>{try{let q=db.collection(col);if(filtros)filtros.forEach(f=>q=q.where(f[0],f[1],f[2]));const snap=await q.get();return snap.docs.map(d=>({id:d.id,...d.data()}));}catch(e){return[];}};
+    window.fbEscuchar=(col,cb,filtros)=>{try{let q=db.collection(col);if(filtros)filtros.forEach(f=>q=q.where(f[0],f[1],f[2]));return q.onSnapshot(snap=>cb(snap.docs.map(d=>({id:d.id,...d.data()}))));} catch(e){return()=>{};}};
+    console.log('✅ Firebase conectado');
+  </script>
   <script src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone@7.23.2/babel.min.js"></script>
@@ -549,32 +567,51 @@ const PRODUCTOS_LOCAL=[
 // PRODUCT SEARCH MODAL — conectado al catálogo Wikuk
 // ══════════════════════════════════════════════════════════════════
 function ProdModal({onSelect, onClose}){
-  const [q,setQ]       = useState("");
-  const [cat,setCat]   = useState("Todos");
+  const [q,setQ]         = useState("");
+  const [cat,setCat]     = useState("Todos");
+  const [prods,setProds] = useState(PRODUCTOS_LOCAL); // empieza con locales
+  const [loading,setLoading] = useState(false);
 
-  // Category groups for sidebar
+  // Cargar desde Firebase si está disponible
+  useEffect(()=>{
+    if(!window.fbObtener) return;
+    setLoading(true);
+    window.fbObtener('productos').then(data=>{
+      if(data && data.length > 0){
+        setProds(data.map(d=>({
+          codigo:d.codigo||d.id,
+          nombre:d.nombre||"",
+          formato:d.formato||"",
+          precio:d.precio||"",
+          cat:d.categoria||d.cat||"Otros",
+          sub:d.subcategoria||d.sub||"",
+        })));
+      }
+      setLoading(false);
+    }).catch(()=>setLoading(false));
+  },[]);
+
   const CAT_GROUPS=[
-    {label:"Wikuk",    cats:["Wikuk Especias","Wikuk Preparados"]},
-    {label:"Ceylan",   cats:["Ceylan Especias","Ceylan Preparados"]},
-    {label:"Taberner", cats:["Taberner Especias","Taberner Preparados"]},
+    {label:"Wikuk",    cats:["Wikuk — Especias","Wikuk — Preparados"]},
+    {label:"Ceylan",   cats:["Ceylan — Especias","Ceylan — Preparados"]},
+    {label:"Taberner", cats:["Taberner — Especias","Taberner — Preparados"]},
     {label:"Campana",  cats:["La Campana"]},
-    {label:"Spots",    cats:["Spot Wikuk","Spot Ceylan","Spot Taberner","Spot Campana","Spot Merkapack","Spot CUI","Spot Frumen","Spot El Carmen","Spot Sierra Nevada"]},
+    {label:"Spots",    cats:["Spot Wikuk","Spot Ceylan","Spot Taberner","Spot Campana"]},
     {label:"Otros",    cats:["Envases","Accesorios","Aditivos"]},
-    {label:"Promo",    cats:["Promo Tripas","Promo Especias","Promo Envases"]},
   ];
 
-  const catColor=c=>c.includes('Preparados')?C.blue:c.includes('Especias')?C.amber:c.includes('Tripa')?C.green:c.includes('Envases')?'#0891B2':c.includes('Aditivos')?C.purple:c.includes('Promo')?C.red:c.includes('Spot')?'#7C3AED':C.muted;
+  const catColor=c=>c.includes('Preparados')?C.blue:c.includes('Especias')?C.amber:c.includes('Campana')?C.green:c.includes('Envases')?'#0891B2':c.includes('Aditivos')?C.purple:c.includes('Spot')?'#7C3AED':C.muted;
 
   const filtered=useMemo(()=>{
     const qn=q.trim().toLowerCase();
-    return PRODUCTOS_LOCAL.filter(p=>{
+    return prods.filter(p=>{
       const mq=!qn||
         (p.codigo||"").toLowerCase().includes(qn)||
         (p.nombre||"").toLowerCase().includes(qn)||
         (p.formato||"").toLowerCase().includes(qn);
       return mq&&(cat==="Todos"||p.cat===cat);
-    }).slice(0,80); // max 80 para no sobrecargar
-  },[q,cat]);
+    }).slice(0,80);
+  },[q,cat,prods]);
 
   return(
     <div style={{position:"fixed",inset:0,background:"#00000077",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:"8px"}}>
@@ -587,6 +624,8 @@ function ProdModal({onSelect, onClose}){
             placeholder="Código o nombre del producto…"
             style={{flex:1,border:"none",outline:"none",fontSize:15,color:C.text,background:"transparent"}}/>
           <span style={{fontSize:11,color:C.muted}}>{filtered.length<80?filtered.length:"80+"} resultados</span>
+          {loading&&<span style={{fontSize:10,color:C.blue}}>⏳ Cargando…</span>}
+          {!loading&&prods.length>80&&<span style={{fontSize:10,color:C.green}}>🔥 {prods.length} productos</span>}
           <button onClick={onClose} style={{background:C.bg,border:"none",borderRadius:6,padding:"4px 11px",cursor:"pointer",color:C.muted,fontSize:15,fontWeight:700}}>✕</button>
         </div>
 
@@ -620,7 +659,7 @@ function ProdModal({onSelect, onClose}){
               <span style={{fontSize:36,display:"block",marginBottom:12}}>🔍</span>
               <p style={{margin:"0 0 6px",fontSize:15,fontWeight:700,color:C.text}}>Busca un producto</p>
               <p style={{margin:0,fontSize:13}}>Escribe el código o nombre, o filtra por categoría arriba</p>
-              <p style={{margin:"12px 0 0",fontSize:11,color:C.light}}>{PRODUCTOS_LOCAL.length} productos disponibles</p>
+              <p style={{margin:"12px 0 0",fontSize:11,color:C.light}}>{prods.length} productos disponibles {prods.length>80?"🔥 Firebase":"📦 local"}</p>
             </div>
           ):filtered.length===0?(
             <div style={{padding:"32px",textAlign:"center",color:C.muted}}>
@@ -4966,9 +5005,205 @@ function AdminUsers({users, onUpdate}){
   );
 }
 
+// ══════════════════════════════════════════════════════════════════
+// CATÁLOGO — Vista integrada con Firebase
+// ══════════════════════════════════════════════════════════════════
+function CatalogoApp({session, onLogout, onSwitchCRM}){
+  const [productos,setProductos]=useState(PRODUCTOS_LOCAL);
+  const [loading,setLoading]=useState(true);
+  const [q,setQ]=useState("");
+  const [catSel,setCatSel]=useState("Todos");
+  const [subSel,setSubSel]=useState("Todas");
+
+  // Cargar productos desde Firebase
+  useEffect(()=>{
+    if(!window.fbObtener){setLoading(false);return;}
+    window.fbObtener('productos').then(data=>{
+      if(data&&data.length>0){
+        setProductos(data.map(d=>({
+          codigo:d.codigo||d.id,nombre:d.nombre||"",
+          formato:d.formato||"",precio:d.precio||0,
+          cat:d.categoria||"Otros",sub:d.subcategoria||"",activo:d.activo!==false
+        })));
+      }
+      setLoading(false);
+    }).catch(()=>setLoading(false));
+  },[]);
+
+  const NARANJA="#C2622D";
+  const cats=[...new Set(productos.map(p=>p.cat))].sort();
+  const subs=catSel==="Todos"?[]:[...new Set(productos.filter(p=>p.cat===catSel).map(p=>p.sub).filter(Boolean))].sort();
+
+  const filtered=useMemo(()=>{
+    const ql=q.trim().toLowerCase();
+    return productos.filter(p=>{
+      if(!p.activo&&p.activo!==undefined)return false;
+      const mq=!ql||(p.codigo||"").toLowerCase().includes(ql)||(p.nombre||"").toLowerCase().includes(ql)||(p.formato||"").toLowerCase().includes(ql);
+      const mc=catSel==="Todos"||p.cat===catSel;
+      const ms=subSel==="Todas"||p.sub===subSel;
+      return mq&&mc&&ms;
+    });
+  },[q,catSel,subSel,productos]);
+
+  const catColor=c=>c.includes('Preparados')?'#1A5FD4':c.includes('Especias')?'#D97706':c.includes('Campana')?'#059669':c.includes('Envases')?'#0891B2':c.includes('Aditivos')?'#7C3AED':c.includes('Spot')?'#7C3AED':'#6B7280';
+  const fmtPrecio=p=>typeof p==='number'?`${p.toFixed(2).replace('.',',')} €`:`${p} €`;
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans','Helvetica Neue',sans-serif",background:"#F4F4F4"}}>
+      {/* Header */}
+      <div style={{background:C.navy,padding:"0 16px",height:52,display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flex:1}}>
+          <span style={{color:"#FFF",fontSize:16,fontWeight:900,letterSpacing:"-0.02em"}}>WIKUK</span>
+          <span style={{background:NARANJA,color:"#fff",borderRadius:6,padding:"2px 8px",fontSize:10,fontWeight:700}}>Catálogo</span>
+          {loading&&<span style={{color:"#9CA3AF",fontSize:11}}>Cargando…</span>}
+          {!loading&&<span style={{color:"#9CA3AF",fontSize:11}}>{productos.length} productos 🔥</span>}
+        </div>
+        {/* Buscador */}
+        <div style={{flex:2,maxWidth:400,position:"relative"}}>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Buscar producto o código…"
+            style={{width:"100%",padding:"7px 14px 7px 32px",borderRadius:8,border:"none",background:"#FFFFFF18",color:"#FFF",fontSize:13,outline:"none",boxSizing:"border-box"}}/>
+          <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#9CA3AF",fontSize:14}}>🔍</span>
+          {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#9CA3AF",cursor:"pointer",fontSize:16}}>×</button>}
+        </div>
+        <div style={{display:"flex",gap:6,flexShrink:0}}>
+          {/* Switch to CRM */}
+          <button onClick={onSwitchCRM}
+            style={{padding:"6px 12px",borderRadius:8,border:`1px solid #FFFFFF33`,background:"transparent",color:"#9CA3AF",fontSize:11,fontWeight:600,cursor:"pointer"}}>
+            📊 CRM
+          </button>
+          <button onClick={onLogout} style={{padding:"6px 12px",borderRadius:8,border:"none",background:"#FFFFFF18",color:"#9CA3AF",fontSize:11,cursor:"pointer"}}>Salir</button>
+        </div>
+      </div>
+
+      <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+        {/* Sidebar categorías */}
+        <div style={{width:180,background:"#FFF",borderRight:`1px solid ${C.border}`,overflowY:"auto",flexShrink:0}}>
+          <div style={{padding:"10px 8px"}}>
+            <button onClick={()=>{setCatSel("Todos");setSubSel("Todas");}}
+              style={{width:"100%",textAlign:"left",padding:"8px 10px",borderRadius:8,border:"none",background:catSel==="Todos"?C.navy:"transparent",color:catSel==="Todos"?"#FFF":C.text,fontWeight:700,fontSize:12,cursor:"pointer",marginBottom:4}}>
+              Todos los productos
+            </button>
+            {cats.map(c=>(
+              <div key={c}>
+                <button onClick={()=>{setCatSel(c);setSubSel("Todas");}}
+                  style={{width:"100%",textAlign:"left",padding:"7px 10px",borderRadius:8,border:"none",background:catSel===c?catColor(c)+"18":"transparent",color:catSel===c?catColor(c):C.text,fontWeight:catSel===c?700:400,fontSize:11,cursor:"pointer",marginBottom:2}}>
+                  {c}
+                </button>
+                {catSel===c&&subs.map(s=>(
+                  <button key={s} onClick={()=>setSubSel(subSel===s?"Todas":s)}
+                    style={{width:"100%",textAlign:"left",padding:"5px 10px 5px 20px",borderRadius:7,border:"none",background:subSel===s?catColor(c)+"30":"transparent",color:subSel===s?catColor(c):C.muted,fontWeight:subSel===s?700:400,fontSize:10,cursor:"pointer",marginBottom:1}}>
+                    · {s}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Lista productos */}
+        <div style={{flex:1,overflowY:"auto"}}>
+          {/* Cabecera tabla */}
+          <div style={{display:"grid",gridTemplateColumns:"120px 1fr 90px 110px 80px",gap:0,padding:"8px 16px",background:"#FFF",borderBottom:`1px solid ${C.border}`,position:"sticky",top:0,zIndex:5}}>
+            {["CÓDIGO","PRODUCTO","FMT. MÍN.","FMT. AGRUPADO","PVP"].map(h=>(
+              <span key={h} style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>{h}</span>
+            ))}
+          </div>
+
+          {loading?(
+            <div style={{textAlign:"center",padding:"60px 0",color:C.muted}}>
+              <p style={{fontSize:32}}>⏳</p>
+              <p style={{fontWeight:600}}>Cargando catálogo desde Firebase…</p>
+            </div>
+          ):filtered.length===0?(
+            <div style={{textAlign:"center",padding:"60px 0",color:C.muted}}>
+              <p style={{fontSize:32}}>😕</p>
+              <p style={{fontWeight:600}}>Sin resultados para "{q}"</p>
+            </div>
+          ):(
+            <div>
+              {/* Info */}
+              <div style={{padding:"8px 16px",background:"#FAFAFA",borderBottom:`1px solid ${C.border}`,fontSize:11,color:C.muted}}>
+                {catSel!=="Todos"&&<span style={{fontWeight:700,color:catColor(catSel)}}>{catSel}</span>}
+                {subSel!=="Todas"&&<span> — {subSel}</span>}
+                <span style={{marginLeft:8}}>{filtered.length} producto{filtered.length!==1?"s":""}</span>
+              </div>
+              {filtered.map((p,i)=>{
+                // Parse formato: "B.1KG / CAJA 12×1KG"
+                const fmtParts=(p.formato||"").split("/").map(s=>s.trim());
+                const fmtMin=fmtParts[0]||"";
+                const fmtAgr=fmtParts[1]||"";
+                return(
+                  <div key={`${p.codigo}-${i}`}
+                    style={{display:"grid",gridTemplateColumns:"120px 1fr 90px 110px 80px",gap:0,padding:"10px 16px",borderBottom:`1px solid ${C.border}`,background:i%2===0?"#FFF":"#FAFAFA",alignItems:"center",transition:"background .1s"}}
+                    onMouseEnter={e=>e.currentTarget.style.background="#F0F7FF"}
+                    onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"#FFF":"#FAFAFA"}>
+                    <span style={{fontSize:12,fontFamily:"monospace",color:C.muted}}>{p.codigo}</span>
+                    <div>
+                      <p style={{margin:0,fontSize:13,fontWeight:600,color:C.text}}>{p.nombre}</p>
+                      {p.sub&&<p style={{margin:0,fontSize:10,color:C.light}}>{p.sub}</p>}
+                    </div>
+                    <span style={{fontSize:11,background:C.bg,borderRadius:5,padding:"2px 7px",fontWeight:600,color:C.text}}>{fmtMin}</span>
+                    <span style={{fontSize:11,background:C.blueL,borderRadius:5,padding:"2px 7px",color:C.blue,fontWeight:600}}>{fmtAgr}</span>
+                    <span style={{fontSize:13,fontWeight:800,color:NARANJA}}>{fmtPrecio(p.precio)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SELECTOR DE MODO — después del login
+// ══════════════════════════════════════════════════════════════════
+function ModeSelector({session, onSelect, onLogout}){
+  const BG="#EFEDE8";
+  const NARANJA="#C2622D";
+  return(
+    <div style={{minHeight:"100vh",background:BG,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",fontFamily:"'DM Sans','Helvetica Neue',sans-serif",padding:32}}>
+      <div style={{textAlign:"center",marginBottom:40}}>
+        <p style={{margin:0,fontSize:34,fontWeight:900,letterSpacing:"-0.02em"}}>
+          <span style={{color:"#111"}}>GRUPO </span><span style={{color:C.blue}}>CONSOLIDADO</span>
+        </p>
+        <p style={{margin:"8px 0 0",fontSize:13,color:"#9CA3AF"}}>Bienvenido, <b style={{color:"#111"}}>{session.nombre}</b></p>
+      </div>
+
+      <div style={{display:"flex",gap:16,flexWrap:"wrap",justifyContent:"center",maxWidth:500}}>
+        {/* CRM */}
+        <button onClick={()=>onSelect("crm")}
+          style={{flex:1,minWidth:200,padding:"28px 24px",borderRadius:18,border:`2px solid ${C.border}`,background:"#FFF",cursor:"pointer",textAlign:"center",boxShadow:"0 4px 20px #0001",transition:"all .2s"}}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor=C.blue;e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow="0 8px 32px #1A5FD420";}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 4px 20px #0001";}}>
+          <p style={{margin:"0 0 10px",fontSize:40}}>📊</p>
+          <p style={{margin:"0 0 6px",fontSize:18,fontWeight:800,color:C.text}}>CRM Comercial</p>
+          <p style={{margin:0,fontSize:12,color:C.muted}}>Informes · Clientes · Muestras · Estrategias</p>
+        </button>
+
+        {/* Catálogo */}
+        <button onClick={()=>onSelect("catalogo")}
+          style={{flex:1,minWidth:200,padding:"28px 24px",borderRadius:18,border:`2px solid ${C.border}`,background:"#FFF",cursor:"pointer",textAlign:"center",boxShadow:"0 4px 20px #0001",transition:"all .2s"}}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor=NARANJA;e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 8px 32px ${NARANJA}20`;}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="none";e.currentTarget.style.boxShadow="0 4px 20px #0001";}}>
+          <p style={{margin:"0 0 10px",fontSize:40}}>📦</p>
+          <p style={{margin:"0 0 6px",fontSize:18,fontWeight:800,color:C.text}}>Catálogo</p>
+          <p style={{margin:0,fontSize:12,color:C.muted}}>Tarifas · Precios · Especias · Preparados</p>
+        </button>
+      </div>
+
+      <button onClick={onLogout} style={{marginTop:28,padding:"8px 20px",borderRadius:9,border:"none",background:"transparent",color:"#9CA3AF",fontSize:12,cursor:"pointer"}}>
+        Cerrar sesión
+      </button>
+    </div>
+  );
+}
+
 function App(){
   const [users,setUsers]=useState(USERS_INITIAL);
   const [session,setSession]=useState(null);
+  const [modo,setModo]=useState(null); // null=selector | "crm" | "catalogo"
   const [section,setSection]=useState("dashboard");
   const [nominasSubidas,setNominasSubidas]=useState({});
   const [clientesDB,setClientesDB]=useState(CLIENTES);
@@ -5029,27 +5264,39 @@ function App(){
   useEffect(()=>{try{localStorage.setItem('crm_incidencias',JSON.stringify(incidencias));}catch(e){}},[incidencias]);
 
   const saveReporte=(rep)=>{
+    // Guardar en Firebase
+    const id=`${rep.agente}_S${rep.semana}`;
+    if(window.fbGuardar) window.fbGuardar('reportes', id, rep);
     setMuestrasPendientes(prev=>{
       const nuevas=(rep.muestras||[]).filter(m=>!prev.find(p=>p.id===m.id));
       const updated=prev.map(p=>{const fb=(rep.feedbackMuestras||[]).find(f=>f.id===p.id);return fb?{...p,...fb}:p;});
-      return [...updated,...nuevas.map(m=>({...m,agente:rep.agente,estado:"pendiente"}))];
+      const result=[...updated,...nuevas.map(m=>({...m,agente:rep.agente,estado:"pendiente"}))];
+      if(window.fbGuardar) result.forEach(m=>window.fbGuardar('muestras',m.id,m));
+      return result;
     });
     setReportesSem(p=>[rep,...p.filter(r=>!(r.agente===rep.agente&&r.semana===rep.semana))]);
   };
 
   const handleLogin=(user)=>{
     setSession(user);
+    setModo(null); // show mode selector
     if(user.rol==="rrhh")       setSection("rrhh");
     else if(user.rol==="admin") setSection("usuarios");
     else                        setSection("dashboard");
   };
-  const handleLogout=()=>{setSession(null);setSection("dashboard");};
+  const handleLogout=()=>{setSession(null);setModo(null);setSection("dashboard");};
 
   // ── fichaCliente must be declared BEFORE any conditional return ──
   const [fichaClienteId,setFichaClienteId]=useState(null);
 
   // Show login if not authenticated
   if(!session) return <LoginScreen onLogin={handleLogin}/>;
+
+  // Show mode selector
+  if(!modo) return <ModeSelector session={session} onSelect={setModo} onLogout={handleLogout}/>;
+
+  // Show catalog
+  if(modo==="catalogo") return <CatalogoApp session={session} onLogout={handleLogout} onSwitchCRM={()=>setModo("crm")}/>;
 
   // Build usuario object from session
   const RRHH_USER={id:"rrhh",nombre:session.nombre,rol:"rrhh",equipo:null,color:C.teal};
@@ -5064,10 +5311,10 @@ function App(){
     return i.estado==="abierta"||i.estado==="sin_solucion";
   }).length;
 
-  const addInc=i=>setIncidencias(p=>[i,...p]);
-  const updInc=i=>setIncidencias(p=>p.map(x=>x.id===i.id?i:x));
-  const addRec=r=>setRecuperaciones(p=>[r,...p]);
-  const updRec=r=>setRecuperaciones(p=>p.map(x=>x.id===r.id?r:x));
+  const addInc=i=>{setIncidencias(p=>[i,...p]);if(window.fbGuardar)window.fbGuardar('incidencias',String(i.id),i);};
+  const updInc=i=>{setIncidencias(p=>p.map(x=>x.id===i.id?i:x));if(window.fbGuardar)window.fbGuardar('incidencias',String(i.id),i);};
+  const addRec=r=>{setRecuperaciones(p=>[r,...p]);if(window.fbGuardar)window.fbGuardar('recuperaciones',r.id,r);};
+  const updRec=r=>{setRecuperaciones(p=>p.map(x=>x.id===r.id?r:x));if(window.fbGuardar)window.fbGuardar('recuperaciones',r.id,r);};
 
   const getNominasUsuario=(uid)=>{
     const subidas=nominasSubidas[uid]||[];
@@ -5204,6 +5451,9 @@ function App(){
           </div>
           <div style={{display:"flex",gap:8,alignItems:"center"}}>
             <Tag label={rolLabel} color={uColor}/>
+            <button onClick={()=>setModo("catalogo")} style={{display:"flex",gap:5,alignItems:"center",padding:"5px 12px",borderRadius:7,border:`1px solid ${C.border}`,background:"transparent",color:C.muted,fontSize:11,fontWeight:600,cursor:"pointer"}}>
+              📦 Catálogo
+            </button>
             <button onClick={handleLogout} style={{display:"flex",gap:6,alignItems:"center",padding:"6px 14px",borderRadius:7,border:`1px solid ${C.border}`,background:"transparent",color:C.muted,fontSize:11,fontWeight:600,cursor:"pointer"}}>
               <Ico d={IC.logout} s={13} c={C.muted}/> Salir
             </button>
