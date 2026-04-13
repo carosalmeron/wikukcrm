@@ -4907,33 +4907,25 @@ function App(){
   const [section,setSection]=useState("dashboard");
   const [nominasSubidas,setNominasSubidas]=useState({});
   const [clientesDB,setClientesDB]=useState(CLIENTES);
+  const [objetivosDB,setObjetivosDB]=useState({});
+  const [historialDB,setHistorialDB]=useState([]);
+  const [incidencias,setIncidencias]=useState(INITIAL_INC);
+  const [recuperaciones,setRecuperaciones]=useState([]);
+  const [muestrasPendientes,setMuestrasPendientes]=useState([]);
 
-  // ── Datos persistentes via localStorage ──
   useEffect(()=>{
-    try {
-      const rec = localStorage.getItem('crm_recuperaciones');
-      const mue = localStorage.getItem('crm_muestras');
-      const inc = localStorage.getItem('crm_incidencias');
-      if(rec) setRecuperaciones(JSON.parse(rec));
-      if(mue) setMuestrasPendientes(JSON.parse(mue));
-      if(inc) setIncidencias(JSON.parse(inc));
-    } catch(e){}
+    try{
+      const rec=localStorage.getItem('crm_recuperaciones');
+      const mue=localStorage.getItem('crm_muestras');
+      const inc=localStorage.getItem('crm_incidencias');
+      if(rec)setRecuperaciones(JSON.parse(rec));
+      if(mue)setMuestrasPendientes(JSON.parse(mue));
+      if(inc)setIncidencias(JSON.parse(inc));
+    }catch(e){}
   },[]);
-
-  // ── Guardar recuperaciones ──
-  useEffect(()=>{
-    try{localStorage.setItem('crm_recuperaciones',JSON.stringify(recuperaciones));}catch(e){}
-  },[recuperaciones]);
-
-  // ── Guardar muestras ──
-  useEffect(()=>{
-    try{localStorage.setItem('crm_muestras',JSON.stringify(muestrasPendientes));}catch(e){}
-  },[muestrasPendientes]);
-
-  // ── Guardar incidencias ──
-  useEffect(()=>{
-    try{localStorage.setItem('crm_incidencias',JSON.stringify(incidencias));}catch(e){}
-  },[incidencias]);
+  useEffect(()=>{try{localStorage.setItem('crm_recuperaciones',JSON.stringify(recuperaciones));}catch(e){}},[recuperaciones]);
+  useEffect(()=>{try{localStorage.setItem('crm_muestras',JSON.stringify(muestrasPendientes));}catch(e){}},[muestrasPendientes]);
+  useEffect(()=>{try{localStorage.setItem('crm_incidencias',JSON.stringify(incidencias));}catch(e){}},[incidencias]);
 
   const handleLogin=(user)=>{
     setSession(user);
