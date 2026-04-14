@@ -7441,20 +7441,25 @@ function App(){
     if(user.rol==="rrhh")       setSection("rrhh");
     else if(user.rol==="admin") setSection("usuarios");
     else                        setSection("dashboard");
-
-    // Cargar TODOS los clientes desde Firebase (sin filtro — evita necesidad de índices)
-    if(window.db){
-      setClientesCargando(true);
-      window.db.collection('clientes').get()
-        .then(snap=>{
-          const data=snap.docs.map(d=>({id:d.id,...d.data()}));
-          console.log('Firebase clientes total:',data.length);
-          if(data.length>0) setClientesDB(data);
-          setClientesCargando(false);
-        })
-        .catch(e=>{console.warn('Error clientes:',e.message);setClientesCargando(false);});
-    }
   };
+
+  // ── Cargar clientes cuando hay sesión ───────────────────────────
+  useEffect(()=>{
+    if(!session||!window.db) return;
+    setClientesCargando(true);
+    console.log('Cargando clientes para session:',JSON.stringify({uid:session.uid,id:session.id,rol:session.rol}));
+    window.db.collection('clientes').get()
+      .then(snap=>{
+        const data=snap.docs.map(d=>({id:d.id,...d.data()}));
+        console.log('Firebase total clientes:',data.length,'| muestra agente:',data[0]?.agente);
+        if(data.length>0) setClientesDB(data);
+        setClientesCargando(false);
+      })
+      .catch(e=>{
+        console.error('Firebase error clientes:',e.code,e.message);
+        setClientesCargando(false);
+      });
+  },[session?.uid,session?.id]);
   const handleLogout=()=>{setSession(null);setModo(null);setSection("dashboard");};
 
   // ── fichaCliente must be declared BEFORE any conditional return ──
