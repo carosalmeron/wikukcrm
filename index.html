@@ -7153,6 +7153,13 @@ function App(){
   // ── Carga inicial desde Firebase (todas las colecciones) ─────────
   useEffect(()=>{
     if(!window.fbObtener) return;
+    // Clientes — carga directa con window.db para mayor fiabilidad
+    if(window.db){
+      window.db.collection('clientes').get().then(snap=>{
+        const data=snap.docs.map(d=>({id:d.id,...d.data()}));
+        if(data.length>0){setClientesDB(data);console.log('✓',data.length,'clientes');}
+      }).catch(e=>console.warn('clientes:',e.message));
+    }
     // Reportes
     window.fbObtener('reportes').then(data=>{
       if(data&&data.length>0) setReportesSem(prev=>{
