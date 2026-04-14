@@ -421,18 +421,19 @@ const CLIENTES=[
 ];
 
 // ── BUSCADOR DE CLIENTES INLINE ──────────────────────────────────
-function ClienteBuscadorInline({uid, value, onChange, onSelect, placeholder="Cliente…"}){
+function ClienteBuscadorInline({uid, value, onChange, onSelect, placeholder="Cliente…", clientesDB=[]}){
   const [open,setOpen]   = useState(false);
   const [q,setQ]         = useState("");
 
   const resultados = useMemo(()=>{
     if(!q||q.length<2) return [];
     const ql=q.toLowerCase();
-    return CLIENTES.filter(c=>
+    const src=clientesDB.length>3?clientesDB:CLIENTES;
+    return src.filter(c=>
       c.agente===uid &&
       (c.nombre.toLowerCase().includes(ql)||c.id.toLowerCase().includes(ql))
     ).slice(0,20);
-  },[q,uid]);
+  },[q,uid,clientesDB]);
 
   const seleccionar = (c) => {
     onChange(c.nombre);
@@ -2254,13 +2255,17 @@ function VistaHistorialMuestras({muestras, onFeedback, feedbackLocal}){
   );
 }
 
-function Reporting({usuario,reportes,onSaveReporte,objetivos,recuperacionesAsignadas,muestrasPendientes,updRec,addRec,onOpenFicha}){
+function Reporting({usuario,reportes,onSaveReporte,objetivos,recuperacionesAsignadas,muestrasPendientes,updRec,addRec,onOpenFicha,clientesDB=[]}){
   const {rol,equipo,id:uid,color}=usuario;
   const semana=SEMANA_ACTUAL;
 
   // ── ALL HOOKS MUST BE FIRST — before any conditional return ─────────
   const repInicial=useMemo(()=>reportes.find(r=>r.agente===uid&&r.semana===semana),[reportes,uid,semana]);
-  const misClientes=useMemo(()=>CLIENTES.filter(c=>c.agente===uid),[uid]);
+  const misClientes=useMemo(()=>{
+    // Usar clientesDB si está cargado, sino fallback a CLIENTES hardcoded
+    const src=clientesDB.length>3?clientesDB:CLIENTES;
+    return src.filter(c=>c.agente===uid);
+  },[uid,clientesDB]);
   const recAsig=useMemo(()=>(recuperacionesAsignadas||[]).filter(r=>r.agente===uid&&r.estado==="en_curso"),[recuperacionesAsignadas,uid]);
   const objetivo=useMemo(()=>objetivos?.[uid]?.find(o=>o.semana===semana),[objetivos,uid,semana]);
 
@@ -2290,7 +2295,7 @@ function Reporting({usuario,reportes,onSaveReporte,objetivos,recuperacionesAsign
     // Vista detalle de agente
     if(selAgente){
       const rep = reportes.find(r=>r.agente===selAgente.id&&r.semana===semana);
-      const clientesAg = CLIENTES.filter(c=>c.agente===selAgente.id);
+      const clientesAg = (clientesDB.length>3?clientesDB:CLIENTES).filter(c=>c.agente===selAgente.id);
       const recsAg = (recuperacionesAsignadas||[]).filter(r=>r.agente===selAgente.id);
       const muestrasAg = rep?.muestras||[];
       const visitasAg  = rep?.visitas||[];
@@ -2428,7 +2433,7 @@ function Reporting({usuario,reportes,onSaveReporte,objetivos,recuperacionesAsign
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               {agentesEquipo.map(v=>{
                 const rep=reportes.find(r=>r.agente===v.id&&r.semana===semana);
-                const clientesAg=CLIENTES.filter(c=>c.agente===v.id);
+                const clientesAg=(clientesDB.length>3?clientesDB:CLIENTES).filter(c=>c.agente===v.id);
                 const pctV=clientesAg.length&&rep?Math.round((rep.visitas?.length||0)/clientesAg.length*100):0;
                 const ventas=rep?.ventas?.ventas_real?parseFloat(rep.ventas.ventas_real):null;
                 const pendEstr=(recuperacionesAsignadas||[]).filter(r=>r.agente===v.id&&r.estado==="pend_aprobacion").length;
@@ -7567,7 +7572,7 @@ function App(){
     if(session.rol==="rrhh")      return <RRHHPortal nominasSubidas={nominasSubidas} onPublicar={handlePublicar}/>;
     if(section==="usuarios")      return <AdminUsers users={users} onUpdate={setUsers}/>;
     if(section==="dashboard")     return <Dashboard usuario={usuario} recuperaciones={recuperaciones} muestrasPendientes={muestrasPendientes} incidencias={incidencias} onNavigate={setSection}/>;
-    if(section==="reporting")     return <Reporting usuario={usuario} reportes={reportesSem} onSaveReporte={saveReporte} objetivos={objetivosDB} recuperacionesAsignadas={recuperaciones} muestrasPendientes={muestrasPendientes.filter(m=>m.agente===usuario.id)} updRec={updRec} addRec={addRec} onOpenFicha={setFichaClienteId}/>;
+    if(section==="reporting")     return <Reporting usuario={usuario} reportes={reportesSem} onSaveReporte={saveReporte} objetivos={objetivosDB} recuperacionesAsignadas={recuperaciones} muestrasPendientes={muestrasPendientes.filter(m=>m.agente===usuario.id)} updRec={updRec} addRec={addRec} onOpenFicha={setFichaClienteId} clientesDB={clientesDB}/>;
     if(section==="clientes")      return <MisClientes
       clientes={clientesDB.filter(c=>{
         if(session.rol==="agente"){const uid=session.uid||session.id;return c.agente===uid;}
