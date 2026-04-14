@@ -1046,401 +1046,154 @@ function PasoVentas({data, onChange, objetivo}){
 }
 
 // ─ Paso 2: Visitas ────────────────────────────────────────────────
+// ─ Paso 2: Visitas ────────────────────────────────────────────────
 function PasoVisitas({clientes, visitas, onVisita, nuevosClientes=[], onGuardarNuevo, onEditarNuevo, onSubPantalla, onOpenFicha}){
-  const [rutaFijada,setRutaFijada] = useState(null);
-  const [sel,setSel]               = useState(null);
-  const [formV,setFormV]           = useState({resultado:"pedido",notas:""});
-  const [showBuscador,setShowBuscador] = useState(false);
-  const [busqQ,setBusqQ]           = useState("");
-  const [showNuevo,setShowNuevo]   = useState(false);
-  const [scanLoading,setScanLoading] = useState(false);
+  const [sel,setSel]           = useState(null);
+  const [formV,setFormV]       = useState({resultado:"pedido",notas:""});
+  const [q,setQ]               = useState("");
+  const [showNuevo,setShowNuevo] = useState(false);
   const [fotoTarjeta,setFotoTarjeta] = useState(null);
-  const [editNuevo,setEditNuevo]   = useState(null);
-  const [formNuevo,setFormNuevo]   = useState({nombre:"",contacto:"",telefono:"",poblacion:"",empresa:"",email:"",ruta:0});
+  const [formNuevo,setFormNuevo] = useState({nombre:"",contacto:"",telefono:"",poblacion:"",empresa:"",email:""});
 
-  const rutasDisp  = [...new Set(clientes.filter(c=>c.ruta>0).map(c=>c.ruta))].sort((a,b)=>a-b);
-  const clientesRuta = rutaFijada ? clientes.filter(c=>c.ruta===rutaFijada) : [];
-  const clientesBusq = busqQ.length>=2 ? clientes.filter(c=>c.ruta!==rutaFijada&&(c.nombre.toLowerCase().includes(busqQ.toLowerCase())||c.id.toLowerCase().includes(busqQ.toLowerCase()))).slice(0,20) : [];
-  const nuevosDeRuta = (nuevosClientes||[]).filter(c=>c.ruta===rutaFijada);
+  const visitados=visitas.map(v=>v.clienteId||v.clienteNombre);
+  const clientesFiltrados=useMemo(()=>{
+    if(!q||q.length<2) return clientes;
+    const ql=q.toLowerCase();
+    return clientes.filter(c=>c.nombre.toLowerCase().includes(ql)||(c.codigoERP||"").toLowerCase().includes(ql));
+  },[clientes,q]);
 
-  const escanearTarjeta = async (e) => {
-    const file = e.target.files?.[0]; if(!file) return;
-    setScanLoading(true);
-    try {
-      // Guardar la foto siempre, independientemente del OCR
-      const dataUrl = await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(file);});
-      setFotoTarjeta(dataUrl);
-      const base64 = dataUrl.split(",")[1];
-      // Intentar OCR con Claude
-      const resp = await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:file.type||"image/jpeg",data:base64}},{type:"text",text:'Extrae los datos de esta tarjeta de visita. Responde SOLO con JSON: {"nombre":"","empresa":"","contacto":"","telefono":"","email":"","poblacion":""}. Si no encuentras un dato deja el campo vacío. Solo JSON.'}]}]})});
-      const data = await resp.json();
-      const parsed = JSON.parse((data.content?.[0]?.text||"{}").replace(/```json|```/g,"").trim());
-      // Rellenar formulario con los datos extraídos
-      setFormNuevo(f=>({
-        ...f,
-        nombre:    parsed.nombre    || parsed.empresa || f.nombre,
-        contacto:  parsed.contacto  || f.contacto,
-        telefono:  parsed.telefono  || f.telefono,
-        poblacion: parsed.poblacion || f.poblacion,
-        empresa:   parsed.empresa   || f.empresa,
-        email:     parsed.email     || f.email,
-      }));
-    } catch(err) {
-      console.log("OCR error:", err);
-      // La foto ya está guardada aunque falle el OCR
-    }
-    finally { setScanLoading(false); }
+  const guardarVisita=()=>{
+    if(!sel) return;
+    onVisita({clienteId:sel.id,clienteNombre:sel.nombre,resultado:formV.resultado,notas:formV.notas,semana:SEMANA_ACTUAL});
+    setFormV({resultado:"pedido",notas:""});
+    setSel(null);
+    if(onSubPantalla) onSubPantalla(false);
   };
 
-  const guardarNuevo = () => {
+  const guardarNuevo=()=>{
     if(!formNuevo.nombre.trim()) return;
-    const nuevoC = {
-      id:`NUEVO-${Date.now()}`,
-      nombre:   formNuevo.nombre.trim(),
-      contacto: formNuevo.contacto.trim(),
-      telefono: formNuevo.telefono.trim(),
-      poblacion:formNuevo.poblacion.trim(),
-      empresa:  formNuevo.empresa.trim(),
-      email:    formNuevo.email.trim(),
-      foto:     fotoTarjeta||null,
-      ruta:     formNuevo.ruta||rutaFijada||0,
-      esNuevo:  true
-    };
+    const nuevoC={id:`NUEVO-${Date.now()}`,nombre:formNuevo.nombre.trim(),contacto:formNuevo.contacto,telefono:formNuevo.telefono,poblacion:formNuevo.poblacion,empresa:formNuevo.empresa,email:formNuevo.email,foto:fotoTarjeta||null,esNuevo:true};
     setSel(nuevoC);
+    if(onGuardarNuevo) onGuardarNuevo(nuevoC);
     if(onSubPantalla) onSubPantalla(true);
     setShowNuevo(false);
     setFotoTarjeta(null);
-    setFormNuevo({nombre:"",contacto:"",telefono:"",poblacion:"",empresa:"",email:"",ruta:rutaFijada||0});
+    setFormNuevo({nombre:"",contacto:"",telefono:"",poblacion:"",empresa:"",email:""});
   };
 
-  const guardarVisita = () => {
-    if(!sel) return;
-    if(sel.esNuevo && onGuardarNuevo) onGuardarNuevo(sel);
-    onVisita({clienteId:sel.id,clienteNombre:sel.nombre,ruta:sel.ruta||rutaFijada||0,esNuevo:sel.esNuevo||false,...formV});
-    setSel(null); if(onSubPantalla) onSubPantalla(false); setFormV({resultado:"pedido",notas:""});
-  };
-
-  const abrirEditNuevo = (c) => { setEditNuevo(c); setFormNuevo({nombre:c.nombre||"",contacto:c.contacto||"",telefono:c.telefono||"",poblacion:c.poblacion||"",empresa:c.empresa||"",email:c.email||"",ruta:c.ruta||rutaFijada||0}); setFotoTarjeta(c.foto||null); };
-  const guardarEditNuevo = () => {
-    if(!formNuevo.nombre?.trim()) return;
-    if(onGuardarNuevo) onGuardarNuevo({...editNuevo,...formNuevo,foto:fotoTarjeta||editNuevo?.foto});
-    setEditNuevo(null); setFotoTarjeta(null);
-  };
-
-  // ── Pantalla resultado visita ───────────────────────────────────
+  // Pantalla detalle — registro de visita
   if(sel){
+    const yaVisitado=visitados.includes(sel.id)||visitados.includes(sel.nombre);
     return(
       <div>
-        <div style={{background:C.bg,borderRadius:12,padding:"12px 16px",marginBottom:20,display:"flex",gap:10,alignItems:"center"}}>
-          <div style={{flex:1}}>
-            <p style={{margin:0,fontSize:15,fontWeight:800}}>{sel.nombre}</p>
-            <p style={{margin:"2px 0 0",fontSize:11,color:C.muted}}>
-              {sel.esNuevo?`🌱 Nuevo · Ruta ${sel.ruta||rutaFijada}`:sel.ruta&&sel.ruta!==rutaFijada?`Ruta ${sel.ruta} — acción comercial`:`${sel.id} · Ruta ${sel.ruta}`}
-            </p>
-            {sel.esNuevo&&(sel.telefono||sel.email||sel.empresa)&&(
-              <div style={{marginTop:5,fontSize:11,color:C.muted,display:"flex",flexDirection:"column",gap:1}}>
-                {sel.empresa&&<span>🏢 {sel.empresa}</span>}
-                {sel.telefono&&<span>📞 {sel.telefono}</span>}
-                {sel.email&&<span>✉️ {sel.email}</span>}
-              </div>
-            )}
-          </div>
-          <button onClick={()=>setSel(null)} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,color:C.muted}}>✕</button>
+        <button onClick={()=>{setSel(null);if(onSubPantalla)onSubPantalla(false);}} style={{background:"none",border:"none",color:C.blue,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:16,display:"flex",alignItems:"center",gap:4}}>
+          ← Volver a clientes
+        </button>
+        <div style={{background:C.white,borderRadius:14,border:`1px solid ${C.border}`,padding:"18px 20px",marginBottom:16}}>
+          <p style={{margin:"0 0 4px",fontSize:16,fontWeight:800,color:C.text}}>{sel.nombre}</p>
+          {sel.codigoERP&&<p style={{margin:"0 0 2px",fontSize:12,color:C.muted}}>Cód: {sel.codigoERP}</p>}
+          {sel.tel&&<p style={{margin:0,fontSize:12,color:C.muted}}>{sel.tel}</p>}
+          {yaVisitado&&<div style={{marginTop:8,padding:"4px 10px",background:C.greenL,borderRadius:6,fontSize:11,color:C.green,fontWeight:700,display:"inline-block"}}>✓ Ya registrado esta semana</div>}
         </div>
-        <p style={{margin:"0 0 10px",fontSize:12,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Resultado de la visita</p>
-        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
-          {RESULT_VISITA.filter(r=>sel.esNuevo||!["presentacion","informacion"].includes(r.k)).map(r=>(
-            <button key={r.k} onClick={()=>setFormV(f=>({...f,resultado:r.k}))}
-              style={{padding:"13px 16px",borderRadius:12,border:`2px solid ${formV.resultado===r.k?r.color:C.border}`,background:formV.resultado===r.k?r.color+"12":"#FFF",display:"flex",gap:12,alignItems:"center",cursor:"pointer"}}>
-              <span style={{fontSize:22}}>{r.icon}</span>
-              <p style={{margin:0,fontSize:14,fontWeight:formV.resultado===r.k?700:400,color:formV.resultado===r.k?r.color:C.text}}>{r.label}</p>
-              {formV.resultado===r.k&&<span style={{marginLeft:"auto",color:r.color,fontSize:18}}>✓</span>}
+        <p style={{margin:"0 0 8px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Resultado de la visita</p>
+        <div style={{display:"flex",flexWrap:"wrap",gap:7,marginBottom:16}}>
+          {["pedido","llamada","no_contesta","visita_sin_pedido","primera_visita"].map(r=>(
+            <button key={r} onClick={()=>setFormV(f=>({...f,resultado:r}))}
+              style={{padding:"8px 14px",borderRadius:9,border:`2px solid ${formV.resultado===r?C.blue:C.border}`,background:formV.resultado===r?C.blueL:"transparent",color:formV.resultado===r?C.blue:C.muted,fontWeight:formV.resultado===r?700:400,fontSize:12,cursor:"pointer"}}>
+              {r==="pedido"?"✅ Pedido":r==="llamada"?"📞 Llamada":r==="no_contesta"?"📵 No contesta":r==="visita_sin_pedido"?"👋 Visita s/pedido":"🆕 Primera visita"}
             </button>
           ))}
         </div>
-        <textarea value={formV.notas} onChange={e=>setFormV(f=>({...f,notas:e.target.value}))} rows={2}
-          placeholder="Notas opcionales…" style={{...iSt,resize:"none",borderRadius:10,marginBottom:14,fontSize:13}}/>
+        <p style={{margin:"0 0 6px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Notas</p>
+        <textarea value={formV.notas} onChange={e=>setFormV(f=>({...f,notas:e.target.value}))} rows={4}
+          placeholder="Qué se habló, muestra entregada, próximos pasos…"
+          style={{...iSt,resize:"vertical",lineHeight:1.5,marginBottom:18}}/>
         <button onClick={guardarVisita}
-          style={{width:"100%",padding:15,borderRadius:12,border:"none",background:C.navy,color:"#fff",fontWeight:800,fontSize:16,cursor:"pointer"}}>
-          Guardar visita
+          style={{width:"100%",padding:"14px",borderRadius:12,border:"none",background:C.navy,color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer"}}>
+          Guardar visita →
         </button>
       </div>
     );
   }
 
-  // ── Modal editar cliente nuevo ──────────────────────────────────
-  // ── Formulario nuevo cliente / edición (pantalla completa) ────────
-  if(showNuevo||editNuevo){
-    const titulo = editNuevo ? "Editar cliente" : "Nuevo cliente";
-    const accion = editNuevo ? ()=>{ if(onGuardarNuevo) onGuardarNuevo({...editNuevo,...formNuevo,foto:fotoTarjeta||editNuevo.foto}); setEditNuevo(null); setFotoTarjeta(null); } : guardarNuevo;
-    const cancelar = ()=>{ setShowNuevo(false); setEditNuevo(null); setFotoTarjeta(null); setFormNuevo({nombre:"",contacto:"",telefono:"",poblacion:"",empresa:"",email:"",ruta:rutaFijada||0}); if(onSubPantalla) onSubPantalla(false); };
-
+  // Pantalla nuevo cliente
+  if(showNuevo){
     return(
       <div>
-        {/* Header */}
-        <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:20}}>
-          <button onClick={cancelar} style={{background:"none",border:"none",cursor:"pointer",fontSize:20,color:C.muted}}>←</button>
-          <p style={{margin:0,fontSize:17,fontWeight:800,color:C.text}}>{titulo} · Ruta {formNuevo.ruta||rutaFijada}</p>
-        </div>
-
-        {/* Foto tarjeta */}
-        <div style={{marginBottom:18}}>
-          {fotoTarjeta?(
-            <div style={{borderRadius:12,overflow:"hidden",border:`2px solid ${C.green}`,marginBottom:10,position:"relative"}}>
-              <img src={fotoTarjeta} alt="Tarjeta" style={{width:"100%",maxHeight:200,objectFit:"cover",display:"block"}}/>
-              <div style={{position:"absolute",bottom:8,right:8,display:"flex",gap:6}}>
-                <label style={{display:"flex",gap:5,alignItems:"center",padding:"6px 10px",borderRadius:8,background:"rgba(0,0,0,0.6)",color:"#fff",fontWeight:700,fontSize:12,cursor:"pointer"}}>
-                  {scanLoading?"⏳":"🔄"} {scanLoading?"Leyendo…":"Cambiar"}
-                  <input type="file" accept="image/*" capture="environment" onChange={escanearTarjeta} style={{display:"none"}}/>
-                </label>
-                <button onClick={()=>setFotoTarjeta(null)} style={{padding:"6px 10px",borderRadius:8,background:"rgba(220,38,38,0.8)",color:"#fff",fontWeight:700,fontSize:12,border:"none",cursor:"pointer"}}>✕</button>
-              </div>
-            </div>
-          ):(
-            <label style={{display:"flex",gap:12,alignItems:"center",padding:"16px",borderRadius:12,border:`2px dashed ${C.green}`,background:C.greenL,cursor:"pointer",width:"100%",boxSizing:"border-box"}}>
-              <span style={{fontSize:28}}>📷</span>
-              <div>
-                <p style={{margin:0,fontSize:14,fontWeight:700,color:C.green}}>{scanLoading?"Leyendo tarjeta…":"Escanear tarjeta de visita"}</p>
-                <p style={{margin:"2px 0 0",fontSize:12,color:C.green+"99"}}>Foto la cámara · rellena los datos automáticamente</p>
-              </div>
-              <input type="file" accept="image/*" capture="environment" onChange={escanearTarjeta} style={{display:"none"}} disabled={scanLoading}/>
-            </label>
-          )}
-        </div>
-
-        {/* Campos obligatorios */}
-        <p style={{margin:"0 0 12px",fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Datos del cliente</p>
-        {[
-          {k:"nombre",    label:"Nombre / Empresa",     req:true,  type:"text",  placeholder:"Nombre del cliente o empresa"},
-          {k:"contacto",  label:"Persona de contacto",  req:false, type:"text",  placeholder:"¿Con quién has hablado?"},
-          {k:"telefono",  label:"Teléfono",             req:false, type:"tel",   placeholder:"600 000 000"},
-          {k:"poblacion", label:"Población",            req:false, type:"text",  placeholder:"Ciudad o municipio"},
-          {k:"email",     label:"Email",                req:false, type:"email", placeholder:"contacto@empresa.com"},
-        ].map(({k,label,req,type,placeholder})=>(
-          <div key={k} style={{marginBottom:12}}>
-            <p style={{margin:"0 0 6px",fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>
-              {label}{req&&<span style={{color:C.red}}> *</span>}
-            </p>
-            <input
-              type={type}
-              value={formNuevo[k]||""}
-              onChange={e=>setFormNuevo(f=>({...f,[k]:e.target.value}))}
-              placeholder={placeholder}
-              style={{...iSt,borderRadius:10,fontSize:15,padding:"13px 16px"}}
-            />
-          </div>
-        ))}
-
-        {/* Ruta */}
-        <div style={{marginBottom:20}}>
-          <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Ruta asignada</p>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            {[...rutasDisp,...(rutasDisp.includes(0)?[]:[])].map(r=>(
-              <button key={r} onClick={()=>setFormNuevo(f=>({...f,ruta:r}))}
-                style={{padding:"10px 20px",borderRadius:10,border:`2px solid ${formNuevo.ruta===r?C.blue:C.border}`,background:formNuevo.ruta===r?C.blueL:"#FFF",color:formNuevo.ruta===r?C.blue:C.muted,fontWeight:formNuevo.ruta===r?700:400,fontSize:14,cursor:"pointer"}}>
-                Ruta {r}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Botones */}
-        <div style={{display:"flex",gap:10}}>
-          <button onClick={cancelar}
-            style={{flex:1,padding:"14px",borderRadius:12,border:`1px solid ${C.border}`,background:"#FFF",color:C.muted,fontWeight:600,fontSize:15,cursor:"pointer"}}>
-            Cancelar
-          </button>
-          <button onClick={accion} disabled={!formNuevo.nombre.trim()}
-            style={{flex:2,padding:"14px",borderRadius:12,border:"none",background:formNuevo.nombre.trim()?C.navy:C.light,color:"#fff",fontWeight:800,fontSize:15,cursor:formNuevo.nombre.trim()?"pointer":"default"}}>
-            {editNuevo?"✓ Guardar cambios":"Siguiente → resultado"}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Pantalla 1: Selector de ruta ───────────────────────────────
-  if(!rutaFijada){
-    return(
-      <div>
-        <div style={{background:C.blueL,border:`1px solid ${C.blue}33`,borderRadius:12,padding:"14px 16px",marginBottom:24,display:"flex",gap:10}}>
-          <span style={{fontSize:20}}>🗺️</span>
-          <div>
-            <p style={{margin:0,fontSize:14,fontWeight:700,color:C.blue}}>¿Qué ruta haces hoy?</p>
-            <p style={{margin:"3px 0 0",fontSize:12,color:C.blue+"99"}}>Selecciona la ruta. Una vez elegida no se puede cambiar.</p>
-          </div>
-        </div>
+        <button onClick={()=>setShowNuevo(false)} style={{background:"none",border:"none",color:C.blue,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:16}}>← Volver</button>
+        <p style={{margin:"0 0 16px",fontSize:15,fontWeight:800,color:C.text}}>Nuevo cliente</p>
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {rutasDisp.length===0?(
-            <div style={{textAlign:"center",padding:"32px",background:"#FFF",borderRadius:13,border:`1px solid ${C.border}`,color:C.muted}}>
-              <span style={{fontSize:32,display:"block",marginBottom:8}}>📭</span>
-              <p style={{margin:0,fontSize:14,fontWeight:600}}>Sin rutas asignadas</p>
-              <p style={{margin:"6px 0 0",fontSize:12}}>Tus clientes no tienen ruta asignada</p>
+          {[["nombre","Nombre empresa *"],["contacto","Contacto"],["telefono","Teléfono"],["email","Email"],["poblacion","Población"]].map(([k,label])=>(
+            <div key={k}>
+              <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>{label}</p>
+              <input value={formNuevo[k]||""} onChange={e=>setFormNuevo(f=>({...f,[k]:e.target.value}))} style={iSt}/>
             </div>
-          ):rutasDisp.map(r=>{
-            const n=clientes.filter(c=>c.ruta===r).length;
-            return(
-              <button key={r} onClick={()=>setRutaFijada(r)}
-                style={{display:"flex",gap:16,alignItems:"center",padding:"18px 20px",background:"#FFF",borderRadius:14,border:`2px solid ${C.border}`,cursor:"pointer",textAlign:"left",width:"100%",transition:"all .15s"}}
-                onMouseEnter={e=>{e.currentTarget.style.borderColor=C.blue;e.currentTarget.style.background=C.blueL;}}
-                onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.background="#FFF";}}>
-                <div style={{width:52,height:52,borderRadius:14,background:C.blueL,border:`2px solid ${C.blue}33`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                  <span style={{fontSize:22,fontWeight:900,color:C.blue}}>{r}</span>
-                </div>
-                <div style={{flex:1}}>
-                  <p style={{margin:0,fontSize:17,fontWeight:800,color:C.text}}>Ruta {r}</p>
-                  <p style={{margin:"3px 0 0",fontSize:12,color:C.muted}}>{n} cliente{n!==1?"s":""} programados</p>
-                </div>
-                <span style={{color:C.light,fontSize:22}}>›</span>
-              </button>
-            );
-          })}
+          ))}
+          <div>
+            <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Foto tarjeta de visita</p>
+            <label style={{display:"block",border:`2px dashed ${C.border}`,borderRadius:10,padding:"20px",textAlign:"center",cursor:"pointer"}}>
+              {fotoTarjeta?<img src={fotoTarjeta} style={{maxWidth:"100%",maxHeight:180,borderRadius:8,objectFit:"contain"}}/>:<><p style={{fontSize:28}}>📷</p><p style={{fontSize:12,color:C.muted}}>Toca para hacer foto</p></>}
+              <input type="file" accept="image/*" capture="environment" onChange={e=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=ev=>setFotoTarjeta(ev.target.result);r.readAsDataURL(f);}}} style={{display:"none"}}/>
+            </label>
+          </div>
+          <button onClick={guardarNuevo} disabled={!formNuevo.nombre.trim()}
+            style={{padding:"14px",borderRadius:12,border:"none",background:formNuevo.nombre.trim()?C.navy:C.light,color:"#fff",fontWeight:700,fontSize:14,cursor:formNuevo.nombre.trim()?"pointer":"default"}}>
+            Guardar y registrar visita →
+          </button>
         </div>
       </div>
     );
   }
 
-  // ── Pantalla 2: Clientes de la ruta ────────────────────────────
-  const visitadosRuta = visitas.filter(v=>clientesRuta.find(c=>c.id===v.clienteId)).length;
-  const extrasVisit   = visitas.filter(v=>!clientesRuta.find(c=>c.id===v.clienteId));
-  const pctProgreso   = clientesRuta.length ? Math.round(visitadosRuta/clientesRuta.length*100) : 0;
-  const nuevosDeRutaList = (nuevosClientes||[]).filter(c=>c.ruta===rutaFijada);
-
+  // Pantalla principal — lista de clientes
   return(
     <div>
-      {/* Header ruta fijada */}
-      <div style={{background:C.navy,borderRadius:13,padding:"14px 18px",marginBottom:20,display:"flex",gap:12,alignItems:"center"}}>
-        <div style={{width:44,height:44,borderRadius:12,background:C.blue,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-          <span style={{fontSize:20,fontWeight:900,color:"#fff"}}>{rutaFijada}</span>
+      <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center"}}>
+        <div style={{flex:1,position:"relative"}}>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Buscar cliente…"
+            style={{...iSt,padding:"12px 36px 12px 16px",borderRadius:12,fontSize:14,width:"100%"}}/>
+          {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:18}}>×</button>}
         </div>
-        <div style={{flex:1}}>
-          <p style={{margin:0,fontSize:15,fontWeight:800,color:"#fff"}}>Ruta {rutaFijada}</p>
-          <p style={{margin:"2px 0 0",fontSize:11,color:"#9CA3AF"}}>
-            {visitadosRuta}/{clientesRuta.length} visitados · {extrasVisit.length} fuera de ruta
-          </p>
-        </div>
-        <div style={{width:48,height:48,position:"relative",flexShrink:0}}>
-          <svg width="48" height="48" viewBox="0 0 48 48">
-            <circle cx="24" cy="24" r="18" fill="none" stroke="#ffffff22" strokeWidth="4"/>
-            <circle cx="24" cy="24" r="18" fill="none" stroke="#fff" strokeWidth="4"
-              strokeDasharray={`${2*Math.PI*18}`}
-              strokeDashoffset={`${2*Math.PI*18*(1-pctProgreso/100)}`}
-              strokeLinecap="round" transform="rotate(-90 24 24)"/>
-          </svg>
-          <p style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",margin:0,fontSize:11,fontWeight:800,color:"#fff"}}>{pctProgreso}%</p>
-        </div>
-      </div>
-
-      {/* Botones acción */}
-      <div style={{display:"flex",gap:8,marginBottom:16}}>
-        <button onClick={()=>{setShowBuscador(s=>!s);setShowNuevo(false);setBusqQ("");}}
-          style={{flex:1,padding:"10px 8px",borderRadius:10,border:`1.5px solid ${C.border}`,background:showBuscador?C.blueL:"#FFF",color:showBuscador?C.blue:C.muted,fontWeight:600,fontSize:12,cursor:"pointer"}}>
-          🔍 Otra ruta
-        </button>
-        <button onClick={()=>{setShowNuevo(true);if(onSubPantalla)onSubPantalla(true);setShowBuscador(false);setFormNuevo({nombre:"",contacto:"",telefono:"",poblacion:"",empresa:"",email:"",ruta:rutaFijada});setFotoTarjeta(null);}}
-          style={{flex:1,padding:"10px 8px",borderRadius:10,border:`1.5px solid ${C.border}`,background:showNuevo?C.greenL:"#FFF",color:showNuevo?C.green:C.muted,fontWeight:600,fontSize:12,cursor:"pointer"}}>
-          ➕ Cliente nuevo
+        <button onClick={()=>setShowNuevo(true)}
+          style={{padding:"12px 16px",borderRadius:12,border:"none",background:C.navy,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>
+          + Nuevo
         </button>
       </div>
 
-      {/* Buscador otra ruta */}
-      {showBuscador&&(
-        <div style={{background:C.bg,borderRadius:12,padding:"14px",marginBottom:12,border:`1.5px solid ${C.blue}`}}>
-          <p style={{margin:"0 0 8px",fontSize:12,fontWeight:700,color:C.blue}}>Acción comercial — otra ruta</p>
-          <input value={busqQ} onChange={e=>setBusqQ(e.target.value)} autoFocus
-            placeholder="Buscar cliente por nombre o código…" style={{...iSt,borderRadius:10,marginBottom:6}}/>
-          {busqQ.length>=2&&(
-            <div style={{maxHeight:200,overflowY:"auto",borderRadius:8,border:`1px solid ${C.border}`,background:"#FFF"}}>
-              {clientesBusq.length===0
-                ?<p style={{padding:"12px",fontSize:13,color:C.muted,margin:0}}>Sin resultados</p>
-                :clientesBusq.map(c=>(
-                  <button key={c.id} onClick={()=>{setSel(c);setShowBuscador(false);setBusqQ("");if(onSubPantalla)onSubPantalla(true);}}
-                    style={{width:"100%",padding:"10px 14px",border:"none",borderBottom:`1px solid ${C.border}`,background:"transparent",cursor:"pointer",textAlign:"left"}}
-                    onMouseEnter={e=>e.currentTarget.style.background=C.bg}
-                    onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                    <p style={{margin:0,fontSize:13,fontWeight:700}}>{c.nombre}</p>
-                    <p style={{margin:0,fontSize:10,color:C.muted}}>{c.id} · Ruta {c.ruta}</p>
-                  </button>
-                ))
-              }
-            </div>
-          )}
-        </div>
-      )}
+      {/* Contador */}
+      <p style={{margin:"0 0 10px",fontSize:12,color:C.muted}}>
+        {clientes.length} clientes{q?` · ${clientesFiltrados.length} resultados`:""}
+        {visitas.length>0&&<span style={{marginLeft:8,color:C.green,fontWeight:700}}>· {visitas.length} visitados hoy</span>}
+      </p>
 
-      {/* Clientes nuevos de esta ruta */}
-      {nuevosDeRutaList.length>0&&(
-        <div style={{marginBottom:12}}>
-          <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>🌱 Nuevos añadidos</p>
-          {nuevosDeRutaList.map(c=>{
-            const v=visitas.find(x=>x.clienteId===c.id);
-            const rv=v?RESULT_VISITA.find(r=>r.k===v.resultado):null;
-            return(
-              <div key={c.id} style={{background:"#FFF",borderRadius:11,padding:"11px 14px",marginBottom:6,border:`1.5px solid ${C.green}44`,display:"flex",gap:10,alignItems:"center"}}>
-                <span style={{fontSize:18}}>{rv?.icon||"🌱"}</span>
-                <div style={{flex:1,minWidth:0}}>
-                  <p style={{margin:0,fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.nombre}</p>
-                  <p style={{margin:0,fontSize:11,color:rv?.color||C.green,fontWeight:600}}>{rv?.label||"Pendiente"}{c.contacto?` · ${c.contacto}`:""}</p>
-                </div>
-                <button onClick={()=>{setEditNuevo(c);setFormNuevo({nombre:c.nombre||"",contacto:c.contacto||"",telefono:c.telefono||"",poblacion:c.poblacion||"",empresa:c.empresa||"",email:c.email||"",ruta:c.ruta||rutaFijada||0});setFotoTarjeta(c.foto||null);if(onSubPantalla)onSubPantalla(true);}}
-                  style={{padding:"5px 10px",borderRadius:7,border:`1px solid ${C.border}`,background:"#FFF",color:C.blue,fontWeight:600,fontSize:11,cursor:"pointer",flexShrink:0}}>
-                  ✏️
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Visitas fuera de ruta */}
-      {extrasVisit.filter(v=>!v.esNuevo).length>0&&(
-        <div style={{marginBottom:12}}>
-          <p style={{margin:"0 0 8px",fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>✨ Fuera de ruta</p>
-          {extrasVisit.filter(v=>!v.esNuevo).map(v=>{
-            const rv=RESULT_VISITA.find(r=>r.k===v.resultado);
-            return(
-              <div key={v.clienteId} style={{background:"#FFF",borderRadius:11,padding:"11px 14px",marginBottom:6,border:`1px solid ${rv?.color+"44"||C.border}`,display:"flex",gap:10,alignItems:"center"}}>
-                <span style={{fontSize:18}}>{rv?.icon||"✨"}</span>
-                <div style={{flex:1}}><p style={{margin:0,fontSize:13,fontWeight:700}}>{v.clienteNombre}</p><p style={{margin:0,fontSize:11,color:rv?.color||C.muted,fontWeight:600}}>{rv?.label} · Ruta {v.ruta}</p></div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Lista clientes ruta */}
-      <p style={{margin:"0 0 10px",fontSize:11,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Clientes Ruta {rutaFijada}</p>
-      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {clientesRuta.map(c=>{
-          const v=visitas.find(x=>x.clienteId===c.id);
-          const rv=v?RESULT_VISITA.find(r=>r.k===v.resultado):null;
+      {/* Lista clientes */}
+      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+        {clientesFiltrados.slice(0,100).map(c=>{
+          const visitado=visitados.includes(c.id)||visitados.includes(c.nombre);
           return(
-            <div key={c.id} style={{display:"flex",gap:6,alignItems:"stretch"}}>
-              <button onClick={()=>{setSel(c);if(v)setFormV({resultado:v.resultado,notas:v.notas||""});if(onSubPantalla)onSubPantalla(true);}}
-                style={{flex:1,display:"flex",gap:12,alignItems:"center",padding:"13px 16px",background:"#FFF",borderRadius:12,border:`2px solid ${v?rv?.color+"44":C.border}`,cursor:"pointer",textAlign:"left"}}>
-                <div style={{width:38,height:38,borderRadius:9,background:v?rv?.color+"18":C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>
-                  {v?rv?.icon:"📍"}
-                </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <p style={{margin:0,fontSize:13,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.nombre}</p>
-                  <p style={{margin:"2px 0 0",fontSize:11,color:v?rv?.color:C.muted,fontWeight:v?700:400}}>{v?rv?.label:"Pendiente"}</p>
-                </div>
-                <span style={{color:C.light,fontSize:18}}>›</span>
-              </button>
-              {onOpenFicha&&(
-                <button onClick={()=>onOpenFicha(c.id)}
-                  style={{width:44,borderRadius:12,border:`1px solid ${C.border}`,background:C.blueL,color:C.blue,fontSize:18,cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}
-                  title="Ver historial del cliente">
-                  📋
-                </button>
-              )}
+            <div key={c.id} onClick={()=>{setSel(c);if(onSubPantalla)onSubPantalla(true);}}
+              style={{background:C.white,borderRadius:12,border:`1px solid ${visitado?"#86EFAC":C.border}`,padding:"12px 16px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,transition:"box-shadow .15s"}}
+              onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 8px #0001"}
+              onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+              <div style={{width:36,height:36,borderRadius:9,background:visitado?C.greenL:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,flexShrink:0}}>
+                {visitado?"✅":"🏢"}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <p style={{margin:"0 0 2px",fontSize:13,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.nombre}</p>
+                <p style={{margin:0,fontSize:11,color:C.muted}}>{c.codigoERP||c.id}{c.poblacion?` · ${c.poblacion}`:""}</p>
+              </div>
+              {visitado&&<span style={{fontSize:11,color:C.green,fontWeight:700,flexShrink:0}}>Visitado</span>}
+              <span style={{color:C.muted,fontSize:16,flexShrink:0}}>›</span>
             </div>
           );
         })}
+        {clientesFiltrados.length>100&&<p style={{textAlign:"center",fontSize:12,color:C.muted,padding:8}}>Mostrando 100 de {clientesFiltrados.length} — busca para filtrar más</p>}
+        {clientesFiltrados.length===0&&<div style={{textAlign:"center",padding:40,color:C.muted}}><p style={{fontSize:28}}>😕</p><p>Sin resultados para "{q}"</p></div>}
       </div>
     </div>
   );
 }
+
 
 // ─ Paso 3: Muestras ───────────────────────────────────────────────
 function PasoMuestras({muestras, onAdd, onDel, muestrasPendientes, onFeedback, uid, onSubPantalla}){
