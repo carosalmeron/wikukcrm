@@ -32,12 +32,10 @@
       catch(e){console.warn('FB write:',col,e.message);return false;}
     };
     window.fbObtener = async(col)=>{
-      try{
-        const snap=await window.db.collection(col).get();
-        return snap.docs.map(d=>({id:d.id,...d.data()}));
-      }catch(e){console.warn('FB read:',col,e.message);return[];}
+      try{const snap=await window.db.collection(col).get();return snap.docs.map(d=>({id:d.id,...d.data()}));}
+      catch(e){return[];}
     };
-    console.log('Firebase OK — grupo-consolidado-crm');
+    console.log('Firebase OK');
   </script>
   <script src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.development.js"></script>
@@ -7444,22 +7442,17 @@ function App(){
     else if(user.rol==="admin") setSection("usuarios");
     else                        setSection("dashboard");
 
-    // Cargar clientes desde Firebase filtrados por rol
+    // Cargar TODOS los clientes desde Firebase (sin filtro — evita necesidad de índices)
     if(window.db){
       setClientesCargando(true);
-      let query=window.db.collection('clientes');
-      const uid=user.uid||user.id;
-      if(user.rol==="agente")      query=query.where('agente','==',uid);
-      else if(user.rol==="jefe")   query=query.where('equipo','==',user.equipo);
-      // CEO, director, admin cargan todos (5431 docs)
-      query.get().then(snap=>{
-        const data=snap.docs.map(d=>({id:d.id,...d.data()}));
-        if(data.length>0){
-          setClientesDB(data);
-          console.log(`✓ ${data.length} clientes cargados para ${user.nombre} (${user.rol})`);
-        }
-        setClientesCargando(false);
-      }).catch(e=>{console.warn('Error clientes:',e.message);setClientesCargando(false);});
+      window.db.collection('clientes').get()
+        .then(snap=>{
+          const data=snap.docs.map(d=>({id:d.id,...d.data()}));
+          console.log('Firebase clientes total:',data.length);
+          if(data.length>0) setClientesDB(data);
+          setClientesCargando(false);
+        })
+        .catch(e=>{console.warn('Error clientes:',e.message);setClientesCargando(false);});
     }
   };
   const handleLogout=()=>{setSession(null);setModo(null);setSection("dashboard");};
@@ -7481,7 +7474,7 @@ function App(){
   // Build usuario object from session
   const RRHH_USER={id:"rrhh",nombre:session.nombre,rol:"rrhh",equipo:null,color:C.teal};
   const ADM_USER={id:"adm",nombre:session.nombre,rol:"admin",equipo:null,color:C.red};
-  const usuario=session.rol==="rrhh"?RRHH_USER:session.rol==="admin"?ADM_USER:(VENDEDORES.find(v=>v.id===session.uid)||VENDEDORES[0]);
+  const usuario=session.rol==="rrhh"?RRHH_USER:session.rol==="admin"?ADM_USER:(VENDEDORES.find(v=>v.uid===(session.uid||session.id)||v.id===(session.uid||session.id))||VENDEDORES[0]);
   const uColor=ROL_COLORS[session.rol]||C.blue;
 
   const pendInc=incidencias.filter(i=>{
@@ -7571,13 +7564,16 @@ function App(){
     if(section==="dashboard")     return <Dashboard usuario={usuario} recuperaciones={recuperaciones} muestrasPendientes={muestrasPendientes} incidencias={incidencias} onNavigate={setSection}/>;
     if(section==="reporting")     return <Reporting usuario={usuario} reportes={reportesSem} onSaveReporte={saveReporte} objetivos={objetivosDB} recuperacionesAsignadas={recuperaciones} muestrasPendientes={muestrasPendientes.filter(m=>m.agente===usuario.id)} updRec={updRec} addRec={addRec} onOpenFicha={setFichaClienteId}/>;
     if(section==="clientes")      return <MisClientes
-      clientes={clientesDB}
+      clientes={clientesDB.filter(c=>{
+        if(session.rol==="agente"){const uid=session.uid||session.id;return c.agente===uid;}
+        if(session.rol==="jefe")  return c.equipo===session.equipo;
+        return true;
+      })}
       cargando={clientesCargando}
       muestras={muestrasPendientes} recuperaciones={recuperaciones} reportes={reportesSem}
       onOpenFicha={setFichaClienteId}
       usuario={usuario}
-      onClienteCreado={c=>setClientesDB(p=>[c,...p])}/>;
-    if(section==="estadisticas")  return <Estadisticas usuario={usuario}/>;
+      onClienteCreado={c=>setClientesDB(p=>[c,...p])}/>;    if(section==="estadisticas")  return <Estadisticas usuario={usuario}/>;
     if(section==="incidencias")   return <Incidencias usuario={usuario} incidencias={incidencias} onAdd={addInc} onUpdate={updInc} respConfig={respConfig}/>;
     if(section==="recuperacion")  return <Recuperacion usuario={usuario} recuperaciones={recuperaciones} onAdd={addRec} onUpdate={updRec}/>;
     if(section==="muestras-historial") return <HistorialProductosMuestra
