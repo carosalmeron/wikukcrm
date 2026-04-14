@@ -3234,7 +3234,7 @@ function Paso5({form,upd,onNext,onBack}){
 }
 
 // PASO 6 — Resumen
-function Paso6({form,onSave,onBack}){
+function Paso6({form,usuario,onSave,onBack}){
   const ag=AGENTES.find(v=>v.id===form.agenteId);
   const tipo=TIPOS.find(t=>t.k===form.tipo);
   const tipol=TIPOLOGIAS.find(t=>t.k===form.tipologia);
@@ -3284,16 +3284,52 @@ function Paso6({form,onSave,onBack}){
 }
 
 // WIZARD
-function Wizard({onSave,onClose}){
+function Wizard({usuario,opoEditar,onSave,onClose}){
   const [paso,setPaso]=useState(1);
-  const [form,setForm]=useState({tipo:"",tipologia:"",nombre:"",nif:"",contacto:"",cargo:"",tel:"",email:"",web:"",ciudad:"",dir:"",descripcionCliente:"",tarjetaVisita:null,imagenes:[],descripcionOportunidad:"",agenteId:""});
+  const [form,setForm]=useState(opoEditar?{
+    tipo:      opoEditar.tipo||"",
+    tipologia: opoEditar.tipologia||"",
+    nombre:    opoEditar.nombre||"",
+    nif:       opoEditar.nif||"",
+    contacto:  opoEditar.contacto||"",
+    cargo:     opoEditar.cargo||"",
+    tel:       opoEditar.tel||"",
+    email:     opoEditar.email||"",
+    web:       opoEditar.web||"",
+    ciudad:    opoEditar.ciudad||"",
+    dir:       opoEditar.dir||"",
+    descripcionCliente:      opoEditar.descripcionCliente||"",
+    tarjetaVisita:           opoEditar.tarjetaVisita||null,
+    imagenes:                opoEditar.imagenes||[],
+    descripcionOportunidad:  opoEditar.descripcionOportunidad||"",
+    agenteId:                opoEditar.agenteId||"",
+  }:{tipo:"",tipologia:"",nombre:"",nif:"",contacto:"",cargo:"",tel:"",email:"",web:"",ciudad:"",dir:"",descripcionCliente:"",tarjetaVisita:null,imagenes:[],descripcionOportunidad:"",agenteId:""});
   const upd=(k,v)=>setForm(f=>({...f,[k]:v}));
-  const save=()=>{const ag=AGENTES.find(v=>v.id===form.agenteId);onSave({id:"OPO-"+Date.now(),...form,estado:form.agenteId?"asignada":"sin_asignar",creadaPorNombre:"Resp. WIKUK",creadaEn:new Date().toLocaleDateString("es-ES"),semana:16,esOportunidad:true,notas:[],historial:[{accion:"Oportunidad creada",por:"Resp. WIKUK",fecha:new Date().toLocaleDateString("es-ES"),nota:form.descripcionOportunidad},...(form.agenteId?[{accion:`Asignada a ${ag?.nombre}`,por:"Resp. WIKUK",fecha:new Date().toLocaleDateString("es-ES"),nota:""}]:[])],});onClose();};
+  const save=()=>{
+    const ag=AGENTES.find(v=>v.id===form.agenteId);
+    const nombreCreador=usuario?.nombre||"Sistema";
+    onSave({
+      id:"OPO-"+Date.now(),
+      ...form,
+      estado:form.agenteId?"asignada":"sin_asignar",
+      creadaPorNombre:nombreCreador,
+      creadaPorId:usuario?.id||usuario?.uid||"",
+      creadaEn:new Date().toLocaleDateString("es-ES"),
+      semana:SEMANA_ACTUAL,
+      esOportunidad:true,
+      notas:[],
+      historial:[
+        {accion:"Oportunidad creada",por:nombreCreador,fecha:new Date().toLocaleDateString("es-ES"),nota:form.descripcionOportunidad},
+        ...(form.agenteId?[{accion:`Asignada a ${ag?.nombre}`,por:nombreCreador,fecha:new Date().toLocaleDateString("es-ES"),nota:""}]:[]),
+      ],
+    });
+    onClose();
+  };
   return(<div style={{position:"fixed",inset:0,background:"#00000099",zIndex:600,display:"flex",alignItems:"center",justifyContent:"center",padding:8}}>
     <div style={{background:"#fff",borderRadius:20,width:"min(720px,96vw)",maxHeight:"96vh",display:"flex",flexDirection:"column",overflow:"hidden",boxShadow:"0 32px 80px #0006"}}>
       <div style={{padding:"16px 22px 14px",borderBottom:`1px solid ${C.border}`,background:C.navy,flexShrink:0}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-          <p style={{margin:0,fontSize:15,fontWeight:800,color:"#fff"}}>🎯 Nueva oportunidad</p>
+          <p style={{margin:0,fontSize:15,fontWeight:800,color:"#fff"}}>{opoEditar?"✏️ Editar oportunidad":"🎯 Nueva oportunidad"}</p>
           <button onClick={onClose} style={{background:"none",border:"none",color:"#9CA3AF",fontSize:22,cursor:"pointer"}}>✕</button>
         </div>
         <div style={{display:"flex",alignItems:"center"}}>
@@ -3312,7 +3348,7 @@ function Wizard({onSave,onClose}){
         {paso===3&&<Paso3 form={form} upd={upd} onNext={()=>setPaso(4)} onBack={()=>setPaso(2)}/>}
         {paso===4&&<Paso4 form={form} upd={upd} onNext={()=>setPaso(5)} onBack={()=>setPaso(3)}/>}
         {paso===5&&<Paso5 form={form} upd={upd} onNext={()=>setPaso(6)} onBack={()=>setPaso(4)}/>}
-        {paso===6&&<Paso6 form={form} onSave={save} onBack={()=>setPaso(5)}/>}
+        {paso===6&&<Paso6 form={form} usuario={usuario} onSave={save} onBack={()=>setPaso(5)}/>}
       </div>
     </div>
   </div>);
@@ -3395,7 +3431,7 @@ const DEMO_OPOS=[
 // ══════════════════════════════════════════════════════════════════
 // DETALLE OPORTUNIDAD
 // ══════════════════════════════════════════════════════════════════
-function Detalle({opo,onClose,onUpdate}){
+function Detalle({opo,onClose,onUpdate,onEdit}){
   const [tab,setTab]=useState("info");
   const [nota,setNota]=useState("");
   const [asignarId,setAsignarId]=useState(opo.agenteId||"");
@@ -3456,7 +3492,14 @@ function Detalle({opo,onClose,onUpdate}){
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
             <div><p style={{margin:"0 0 2px",fontSize:17,fontWeight:800,color:"#fff"}}>{opo.nombre}</p>
             <p style={{margin:0,fontSize:11,color:"#94A3B8"}}>Creada por {opo.creadaPorNombre} · {opo.creadaEn}</p></div>
-            <button onClick={onClose} style={{background:"none",border:"none",color:"#94A3B8",fontSize:22,cursor:"pointer",marginLeft:8}}>✕</button>
+            <div style={{display:"flex",gap:6,marginLeft:8,flexShrink:0}}>
+              {opo.esOportunidad!==false&&onEdit&&(
+                <button onClick={onEdit} style={{background:"#FFFFFF22",border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",padding:"6px 12px",borderRadius:7,display:"flex",alignItems:"center",gap:5}}>
+                  ✏️ Editar
+                </button>
+              )}
+              <button onClick={onClose} style={{background:"none",border:"none",color:"#94A3B8",fontSize:22,cursor:"pointer"}}>✕</button>
+            </div>
           </div>
         </div>
 
@@ -3612,11 +3655,12 @@ function Detalle({opo,onClose,onUpdate}){
 // ══════════════════════════════════════════════════════════════════
 // GESTOR PRINCIPAL
 // ══════════════════════════════════════════════════════════════════
-function GestorOportunidades(){
+function GestorOportunidades({usuario}){
   const [opos,setOpos]=useState([]);
   const [cargando,setCargando]=useState(true);
   const [detalle,setDetalle]=useState(null);
   const [showForm,setShowForm]=useState(false);
+  const [editando,setEditando]=useState(null); // oportunidad que se está editando
   const [toastMsg,setToastMsg]=useState(null);
 
   // Cargar desde Firebase al arrancar
@@ -3712,8 +3756,14 @@ function GestorOportunidades(){
   return(
     <div style={{maxWidth:900,margin:"0 auto",padding:"20px 14px",fontFamily:"'DM Sans','Helvetica Neue',sans-serif"}}>
 
-      {showForm&&<Wizard onSave={o=>{addOpo(o);setShowForm(false);}} onClose={()=>setShowForm(false)}/>}
-      {detalle&&<Detalle opo={detalle} onClose={()=>setDetalle(null)} onUpdate={updOpo}/>}
+      {showForm&&<Wizard usuario={usuario} onSave={o=>{addOpo(o);setShowForm(false);}} onClose={()=>setShowForm(false)}/>}
+      {editando&&<Wizard usuario={usuario} opoEditar={editando} onSave={async o=>{
+        const updated={...editando,...o,id:editando.id,historial:[...(editando.historial||[]),{accion:"✏️ Oportunidad editada",por:usuario?.nombre||"Usuario",fecha:new Date().toLocaleDateString("es-ES"),nota:""}]};
+        await updOpo(updated);
+        setDetalle(updated);
+        setEditando(null);
+      }} onClose={()=>setEditando(null)}/>}
+      {detalle&&<Detalle opo={detalle} onClose={()=>setDetalle(null)} onUpdate={updOpo} onEdit={()=>setEditando(detalle)}/>}
 
       {toastMsg&&<div style={{position:"fixed",top:16,left:"50%",transform:"translateX(-50%)",zIndex:1000,background:toastMsg.ok?C.greenL:C.amberL,border:`1.5px solid ${toastMsg.ok?C.green:C.amber}`,borderRadius:12,padding:"12px 20px",boxShadow:"0 8px 32px #0002",display:"flex",gap:10,alignItems:"center"}}>
         <span style={{fontSize:16}}>{toastMsg.ok?"✅":"⚠️"}</span>
