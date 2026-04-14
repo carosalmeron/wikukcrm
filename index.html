@@ -5,36 +5,17 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <meta name="theme-color" content="#C2622D"/>
   <title>Grupo Consolidado</title>
-  <style>
-    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
-    body{font-family:'DM Sans','Helvetica Neue',Arial,sans-serif;background:#f4f4f4;-webkit-font-smoothing:antialiased}
-    input,textarea,select,button{font-family:inherit}
-    ::-webkit-scrollbar{width:4px;height:4px}
-    ::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:4px}
-  </style>
+  <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}body{font-family:'DM Sans','Helvetica Neue',Arial,sans-serif;background:#f4f4f4;-webkit-font-smoothing:antialiased}input,textarea,select,button{font-family:inherit}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:4px}</style>
 </head>
 <body>
   <div id="root"></div>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script>
-    firebase.initializeApp({
-      apiKey:"AIzaSyA0H_yllcuPvXmeV2NJSlsOsA9nb62HIPU",
-      authDomain:"grupo-consolidado-crm.firebaseapp.com",
-      projectId:"grupo-consolidado-crm",
-      storageBucket:"grupo-consolidado-crm.firebasestorage.app",
-      messagingSenderId:"402285987115",
-      appId:"1:402285987115:web:3685ad668ca5521e85f16e"
-    });
-    window.db = firebase.firestore();
-    window.fbGuardar = async(col,id,datos)=>{
-      try{await window.db.collection(col).doc(String(id)).set(datos,{merge:true});return true;}
-      catch(e){console.warn('FB write:',col,e.message);return false;}
-    };
-    window.fbObtener = async(col)=>{
-      try{const snap=await window.db.collection(col).get();return snap.docs.map(d=>({id:d.id,...d.data()}));}
-      catch(e){return[];}
-    };
+    firebase.initializeApp({apiKey:"AIzaSyA0H_yllcuPvXmeV2NJSlsOsA9nb62HIPU",authDomain:"grupo-consolidado-crm.firebaseapp.com",projectId:"grupo-consolidado-crm",storageBucket:"grupo-consolidado-crm.firebasestorage.app",messagingSenderId:"402285987115",appId:"1:402285987115:web:3685ad668ca5521e85f16e"});
+    window.db=firebase.firestore();
+    window.fbGuardar=async(col,id,datos)=>{try{await window.db.collection(col).doc(String(id)).set(datos,{merge:true});return true;}catch(e){return false;}};
+    window.fbObtener=async(col)=>{try{const snap=await window.db.collection(col).get();return snap.docs.map(d=>({id:d.id,...d.data()}));}catch(e){return[];}};
     console.log('Firebase OK');
   </script>
   <script src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
@@ -1046,21 +1027,22 @@ function PasoVentas({data, onChange, objetivo}){
 }
 
 // ─ Paso 2: Visitas ────────────────────────────────────────────────
-// ─ Paso 2: Visitas ────────────────────────────────────────────────
-function PasoVisitas({clientes, visitas, onVisita, nuevosClientes=[], onGuardarNuevo, onEditarNuevo, onSubPantalla, onOpenFicha}){
-  const [sel,setSel]           = useState(null);
-  const [formV,setFormV]       = useState({resultado:"pedido",notas:""});
-  const [q,setQ]               = useState("");
-  const [showNuevo,setShowNuevo] = useState(false);
+function PasoVisitas({clientes, visitas, onVisita, nuevosClientes=[], onGuardarNuevo, onSubPantalla, onOpenFicha}){
+  const [rutaFijada,setRutaFijada] = useState(null);
+  const [sel,setSel]               = useState(null);
+  const [formV,setFormV]           = useState({resultado:"pedido",notas:""});
+  const [q,setQ]                   = useState("");
+  const [showNuevo,setShowNuevo]   = useState(false);
   const [fotoTarjeta,setFotoTarjeta] = useState(null);
-  const [formNuevo,setFormNuevo] = useState({nombre:"",contacto:"",telefono:"",poblacion:"",empresa:"",email:""});
+  const [formNuevo,setFormNuevo]   = useState({nombre:"",contacto:"",telefono:"",poblacion:"",empresa:"",email:""});
 
-  const visitados=visitas.map(v=>v.clienteId||v.clienteNombre);
-  const clientesFiltrados=useMemo(()=>{
-    if(!q||q.length<2) return clientes;
-    const ql=q.toLowerCase();
-    return clientes.filter(c=>c.nombre.toLowerCase().includes(ql)||(c.codigoERP||"").toLowerCase().includes(ql));
-  },[clientes,q]);
+  const visitados = visitas.map(v=>v.clienteId||v.clienteNombre);
+
+  // Agrupar por ruta (numérico) o semana
+  const rutasDisp = [...new Set(clientes.map(c=>c.ruta||c.semana||0).filter(r=>r>0))].sort((a,b)=>a-b);
+  const clientesRuta = rutaFijada!=null ? clientes.filter(c=>(c.ruta||c.semana||0)===rutaFijada) : [];
+  const clientesBusq = q.length>=2 ? clientes.filter(c=>(c.ruta||c.semana||0)!==rutaFijada&&(c.nombre.toLowerCase().includes(q.toLowerCase())||(c.codigoERP||"").toLowerCase().includes(q.toLowerCase()))).slice(0,30) : [];
+  const nuevosDeRuta = (nuevosClientes||[]).filter(c=>c.ruta===rutaFijada);
 
   const guardarVisita=()=>{
     if(!sel) return;
@@ -1072,7 +1054,7 @@ function PasoVisitas({clientes, visitas, onVisita, nuevosClientes=[], onGuardarN
 
   const guardarNuevo=()=>{
     if(!formNuevo.nombre.trim()) return;
-    const nuevoC={id:`NUEVO-${Date.now()}`,nombre:formNuevo.nombre.trim(),contacto:formNuevo.contacto,telefono:formNuevo.telefono,poblacion:formNuevo.poblacion,empresa:formNuevo.empresa,email:formNuevo.email,foto:fotoTarjeta||null,esNuevo:true};
+    const nuevoC={id:`NUEVO-${Date.now()}`,nombre:formNuevo.nombre.trim(),contacto:formNuevo.contacto,telefono:formNuevo.telefono,poblacion:formNuevo.poblacion,empresa:formNuevo.empresa,email:formNuevo.email,foto:fotoTarjeta||null,ruta:rutaFijada,esNuevo:true};
     setSel(nuevoC);
     if(onGuardarNuevo) onGuardarNuevo(nuevoC);
     if(onSubPantalla) onSubPantalla(true);
@@ -1081,13 +1063,13 @@ function PasoVisitas({clientes, visitas, onVisita, nuevosClientes=[], onGuardarN
     setFormNuevo({nombre:"",contacto:"",telefono:"",poblacion:"",empresa:"",email:""});
   };
 
-  // Pantalla detalle — registro de visita
+  // ── Pantalla detalle visita ───────────────────────────────────────
   if(sel){
     const yaVisitado=visitados.includes(sel.id)||visitados.includes(sel.nombre);
     return(
       <div>
         <button onClick={()=>{setSel(null);if(onSubPantalla)onSubPantalla(false);}} style={{background:"none",border:"none",color:C.blue,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:16,display:"flex",alignItems:"center",gap:4}}>
-          ← Volver a clientes
+          ← Ruta {rutaFijada}
         </button>
         <div style={{background:C.white,borderRadius:14,border:`1px solid ${C.border}`,padding:"18px 20px",marginBottom:16}}>
           <p style={{margin:"0 0 4px",fontSize:16,fontWeight:800,color:C.text}}>{sel.nombre}</p>
@@ -1106,7 +1088,7 @@ function PasoVisitas({clientes, visitas, onVisita, nuevosClientes=[], onGuardarN
         </div>
         <p style={{margin:"0 0 6px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Notas</p>
         <textarea value={formV.notas} onChange={e=>setFormV(f=>({...f,notas:e.target.value}))} rows={4}
-          placeholder="Qué se habló, muestra entregada, próximos pasos…"
+          placeholder="Qué se habló, próximos pasos…"
           style={{...iSt,resize:"vertical",lineHeight:1.5,marginBottom:18}}/>
         <button onClick={guardarVisita}
           style={{width:"100%",padding:"14px",borderRadius:12,border:"none",background:C.navy,color:"#fff",fontWeight:700,fontSize:15,cursor:"pointer"}}>
@@ -1116,12 +1098,12 @@ function PasoVisitas({clientes, visitas, onVisita, nuevosClientes=[], onGuardarN
     );
   }
 
-  // Pantalla nuevo cliente
+  // ── Pantalla nuevo cliente ────────────────────────────────────────
   if(showNuevo){
     return(
       <div>
         <button onClick={()=>setShowNuevo(false)} style={{background:"none",border:"none",color:C.blue,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:16}}>← Volver</button>
-        <p style={{margin:"0 0 16px",fontSize:15,fontWeight:800,color:C.text}}>Nuevo cliente</p>
+        <p style={{margin:"0 0 16px",fontSize:15,fontWeight:800,color:C.text}}>Nuevo cliente · Ruta {rutaFijada}</p>
         <div style={{display:"flex",flexDirection:"column",gap:12}}>
           {[["nombre","Nombre empresa *"],["contacto","Contacto"],["telefono","Teléfono"],["email","Email"],["poblacion","Población"]].map(([k,label])=>(
             <div key={k}>
@@ -1130,7 +1112,7 @@ function PasoVisitas({clientes, visitas, onVisita, nuevosClientes=[], onGuardarN
             </div>
           ))}
           <div>
-            <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Foto tarjeta de visita</p>
+            <p style={{margin:"0 0 5px",fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase"}}>Foto tarjeta</p>
             <label style={{display:"block",border:`2px dashed ${C.border}`,borderRadius:10,padding:"20px",textAlign:"center",cursor:"pointer"}}>
               {fotoTarjeta?<img src={fotoTarjeta} style={{maxWidth:"100%",maxHeight:180,borderRadius:8,objectFit:"contain"}}/>:<><p style={{fontSize:28}}>📷</p><p style={{fontSize:12,color:C.muted}}>Toca para hacer foto</p></>}
               <input type="file" accept="image/*" capture="environment" onChange={e=>{const f=e.target.files[0];if(f){const r=new FileReader();r.onload=ev=>setFotoTarjeta(ev.target.result);r.readAsDataURL(f);}}} style={{display:"none"}}/>
@@ -1145,30 +1127,78 @@ function PasoVisitas({clientes, visitas, onVisita, nuevosClientes=[], onGuardarN
     );
   }
 
-  // Pantalla principal — lista de clientes
+  // ── Pantalla principal — selección de ruta ────────────────────────
+  if(rutaFijada===null){
+    return(
+      <div>
+        <p style={{margin:"0 0 4px",fontSize:15,fontWeight:800,color:C.text}}>¿Qué ruta haces hoy?</p>
+        <p style={{margin:"0 0 18px",fontSize:12,color:C.muted}}>Selecciona la ruta. Una vez elegida no se puede cambiar.</p>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          {rutasDisp.map(r=>{
+            const cli=clientes.filter(c=>(c.ruta||c.semana||0)===r);
+            const visitadosRuta=cli.filter(c=>visitados.includes(c.id)||visitados.includes(c.nombre)).length;
+            return(
+              <div key={r} onClick={()=>setRutaFijada(r)}
+                style={{background:C.white,borderRadius:14,border:`1px solid ${C.border}`,padding:"18px 20px",cursor:"pointer",display:"flex",alignItems:"center",gap:16,transition:"box-shadow .15s"}}
+                onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px #0001"}
+                onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+                <div style={{width:48,height:48,borderRadius:12,background:C.navy,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,flexShrink:0}}>{r}</div>
+                <div style={{flex:1}}>
+                  <p style={{margin:"0 0 3px",fontSize:15,fontWeight:700,color:C.text}}>Ruta {r}</p>
+                  <p style={{margin:0,fontSize:12,color:C.muted}}>{cli.length} clientes programados{visitadosRuta>0?` · ${visitadosRuta} visitados`:""}</p>
+                </div>
+                {visitadosRuta>0&&<div style={{background:C.greenL,borderRadius:8,padding:"4px 10px",fontSize:11,color:C.green,fontWeight:700}}>{Math.round(visitadosRuta/cli.length*100)}%</div>}
+                <span style={{color:C.muted,fontSize:20}}>›</span>
+              </div>
+            );
+          })}
+          {rutasDisp.length===0&&<div style={{textAlign:"center",padding:40,color:C.muted,background:C.white,borderRadius:14,border:`1px solid ${C.border}`}}><p style={{fontSize:28}}>⏳</p><p style={{fontWeight:600}}>Cargando clientes…</p></div>}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Pantalla lista clientes de la ruta ───────────────────────────
   return(
     <div>
-      <div style={{display:"flex",gap:8,marginBottom:14,alignItems:"center"}}>
+      <button onClick={()=>setRutaFijada(null)} style={{background:"none",border:"none",color:C.blue,fontSize:13,fontWeight:600,cursor:"pointer",marginBottom:14,display:"flex",alignItems:"center",gap:4}}>
+        ← Cambiar ruta
+      </button>
+      <div style={{display:"flex",gap:8,marginBottom:12,alignItems:"center"}}>
         <div style={{flex:1,position:"relative"}}>
-          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Buscar cliente…"
-            style={{...iSt,padding:"12px 36px 12px 16px",borderRadius:12,fontSize:14,width:"100%"}}/>
+          <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Buscar en toda la cartera…"
+            style={{...iSt,padding:"11px 36px 11px 16px",borderRadius:12,fontSize:14,width:"100%"}}/>
           {q&&<button onClick={()=>setQ("")} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:18}}>×</button>}
         </div>
         <button onClick={()=>setShowNuevo(true)}
-          style={{padding:"12px 16px",borderRadius:12,border:"none",background:C.navy,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>
+          style={{padding:"11px 14px",borderRadius:12,border:"none",background:C.navy,color:"#fff",fontWeight:700,fontSize:13,cursor:"pointer",whiteSpace:"nowrap"}}>
           + Nuevo
         </button>
       </div>
 
-      {/* Contador */}
-      <p style={{margin:"0 0 10px",fontSize:12,color:C.muted}}>
-        {clientes.length} clientes{q?` · ${clientesFiltrados.length} resultados`:""}
-        {visitas.length>0&&<span style={{marginLeft:8,color:C.green,fontWeight:700}}>· {visitas.length} visitados hoy</span>}
+      <p style={{margin:"0 0 10px",fontSize:12,color:C.muted,fontWeight:600}}>
+        Ruta {rutaFijada} · {clientesRuta.length} clientes
+        {visitas.length>0&&<span style={{marginLeft:8,color:C.green}}>· {visitas.length} visitados</span>}
       </p>
 
-      {/* Lista clientes */}
+      {/* Búsqueda fuera de ruta */}
+      {q.length>=2&&clientesBusq.length>0&&(
+        <div style={{marginBottom:12}}>
+          <p style={{fontSize:10,fontWeight:700,color:C.muted,textTransform:"uppercase",margin:"0 0 6px"}}>Otros clientes</p>
+          {clientesBusq.map(c=>(
+            <div key={c.id} onClick={()=>{setSel(c);if(onSubPantalla)onSubPantalla(true);}}
+              style={{background:"#FFFBF5",borderRadius:10,border:`1px solid ${C.border}`,padding:"10px 14px",cursor:"pointer",marginBottom:6,display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:16}}>🏢</span>
+              <div style={{flex:1}}><p style={{margin:"0 0 2px",fontSize:13,fontWeight:600,color:C.text}}>{c.nombre}</p><p style={{margin:0,fontSize:11,color:C.muted}}>Ruta {c.ruta||c.semana||"—"} · {c.codigoERP||c.id}</p></div>
+              <span style={{color:C.muted}}>›</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Clientes de la ruta */}
       <div style={{display:"flex",flexDirection:"column",gap:6}}>
-        {clientesFiltrados.slice(0,100).map(c=>{
+        {[...nuevosDeRuta,...clientesRuta].map(c=>{
           const visitado=visitados.includes(c.id)||visitados.includes(c.nombre);
           return(
             <div key={c.id} onClick={()=>{setSel(c);if(onSubPantalla)onSubPantalla(true);}}
@@ -1180,19 +1210,19 @@ function PasoVisitas({clientes, visitas, onVisita, nuevosClientes=[], onGuardarN
               </div>
               <div style={{flex:1,minWidth:0}}>
                 <p style={{margin:"0 0 2px",fontSize:13,fontWeight:700,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{c.nombre}</p>
-                <p style={{margin:0,fontSize:11,color:C.muted}}>{c.codigoERP||c.id}{c.poblacion?` · ${c.poblacion}`:""}</p>
+                <p style={{margin:0,fontSize:11,color:C.muted}}>{c.codigoERP||c.id}{c.tel?` · ${c.tel}`:""}</p>
               </div>
-              {visitado&&<span style={{fontSize:11,color:C.green,fontWeight:700,flexShrink:0}}>Visitado</span>}
-              <span style={{color:C.muted,fontSize:16,flexShrink:0}}>›</span>
+              {c.esNuevo&&<span style={{fontSize:10,background:"#FEF3C7",color:"#D97706",borderRadius:5,padding:"2px 7px",fontWeight:700}}>NUEVO</span>}
+              {visitado&&<span style={{fontSize:11,color:C.green,fontWeight:700,flexShrink:0}}>✓</span>}
+              <span style={{color:C.muted,fontSize:16}}>›</span>
             </div>
           );
         })}
-        {clientesFiltrados.length>100&&<p style={{textAlign:"center",fontSize:12,color:C.muted,padding:8}}>Mostrando 100 de {clientesFiltrados.length} — busca para filtrar más</p>}
-        {clientesFiltrados.length===0&&<div style={{textAlign:"center",padding:40,color:C.muted}}><p style={{fontSize:28}}>😕</p><p>Sin resultados para "{q}"</p></div>}
       </div>
     </div>
   );
 }
+
 
 
 // ─ Paso 3: Muestras ───────────────────────────────────────────────
