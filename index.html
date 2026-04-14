@@ -3450,7 +3450,7 @@ function Detalle({opo,onClose,onUpdate,onEdit}){
     if(!nota.trim()) return;
     const n={id:"n"+Date.now(),texto:nota.trim(),por:"Demo User",fecha:new Date().toLocaleDateString("es-ES")};
     const entry={accion:"Seguimiento añadido",por:"Demo User",fecha:n.fecha,nota:n.texto};
-    onUpdate({...opo,notas:[...notas,n],historial:[...hist,entry],estado:opo.esOportunidad!==false?"seguimiento":opo.estado});
+    onUpdate({...opo,notas:[...notas,n],historial:[...hist,entry],estado:["ganada","perdida"].includes(opo.estado)?opo.estado:"seguimiento"});
     setNota("");
   };
 
@@ -3493,7 +3493,7 @@ function Detalle({opo,onClose,onUpdate,onEdit}){
             <div><p style={{margin:"0 0 2px",fontSize:17,fontWeight:800,color:"#fff"}}>{opo.nombre}</p>
             <p style={{margin:0,fontSize:11,color:"#94A3B8"}}>Creada por {opo.creadaPorNombre} · {opo.creadaEn}</p></div>
             <div style={{display:"flex",gap:6,marginLeft:8,flexShrink:0}}>
-              {opo.esOportunidad!==false&&onEdit&&(
+              {!["ganada","perdida"].includes(opo.estado)&&onEdit&&(
                 <button onClick={onEdit} style={{background:"#FFFFFF22",border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",padding:"6px 12px",borderRadius:7,display:"flex",alignItems:"center",gap:5}}>
                   ✏️ Editar
                 </button>
@@ -3626,12 +3626,12 @@ function Detalle({opo,onClose,onUpdate,onEdit}){
         </div>
 
         <div style={{padding:"12px 20px",borderTop:`1px solid ${C.border}`,background:C.bg,flexShrink:0}}>
-          {opo.esOportunidad!==false&&!showCerrar&&<div style={{display:"flex",gap:8}}>
+          {!["ganada","perdida"].includes(opo.estado)&&!showCerrar&&<div style={{display:"flex",gap:8}}>
             <button onClick={()=>setShowCerrar(true)} style={{flex:2,padding:"11px",borderRadius:9,border:"none",background:C.green,color:"#fff",fontWeight:800,fontSize:13,cursor:"pointer"}}>✅ Convertir a cliente CRM</button>
             <button onClick={perder} style={{flex:1,padding:"11px",borderRadius:9,border:"none",background:C.redL,color:C.red,fontWeight:700,fontSize:13,cursor:"pointer"}}>❌ Perdida</button>
             <button onClick={onClose} style={{padding:"11px 16px",borderRadius:9,border:`1px solid ${C.border}`,background:"transparent",color:C.muted,fontWeight:600,fontSize:13,cursor:"pointer"}}>Cerrar</button>
           </div>}
-          {opo.esOportunidad!==false&&showCerrar&&<div style={{background:"#fff",borderRadius:12,padding:"14px",border:`1px solid ${C.green}44`}}>
+          {!["ganada","perdida"].includes(opo.estado)&&showCerrar&&<div style={{background:"#fff",borderRadius:12,padding:"14px",border:`1px solid ${C.green}44`}}>
             <p style={{margin:"0 0 10px",fontSize:13,fontWeight:700,color:C.green}}>✅ Selecciona tipología y ruta</p>
             <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
               {TIPOLOGIAS.map(t=><button key={t.k} onClick={()=>setTipologia(t.k)} style={{padding:"7px 12px",borderRadius:8,border:`2px solid ${tipologia===t.k?C.green:C.border}`,background:tipologia===t.k?C.greenL:"#fff",color:tipologia===t.k?C.green:C.muted,fontWeight:tipologia===t.k?700:400,fontSize:12,cursor:"pointer"}}>{t.icon} {t.l}</button>)}
@@ -3690,8 +3690,8 @@ function GestorOportunidades({usuario}){
     toast(ok?"✅ Oportunidad guardada en Firebase":"⚠️ Error al guardar",ok);
   };
 
-  const activas=opos.filter(o=>o.esOportunidad!==false&&!["ganada","perdida"].includes(o.estado));
-  const sinAsignar=opos.filter(o=>!o.agenteId&&o.esOportunidad!==false);
+  const activas=opos.filter(o=>!["ganada","perdida"].includes(o.estado));
+  const sinAsignar=opos.filter(o=>!o.agenteId&&!["ganada","perdida"].includes(o.estado));
   const ganadas=opos.filter(o=>o.estado==="ganada");
 
   const filtradas=useMemo(()=>opos.filter(o=>{
