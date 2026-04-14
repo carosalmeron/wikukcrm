@@ -5,17 +5,76 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
   <meta name="theme-color" content="#C2622D"/>
   <title>Grupo Consolidado</title>
-  <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}body{font-family:'DM Sans','Helvetica Neue',Arial,sans-serif;background:#f4f4f4;-webkit-font-smoothing:antialiased}input,textarea,select,button{font-family:inherit}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:4px}</style>
+  <style>
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0}
+    body{font-family:'DM Sans','Helvetica Neue',Arial,sans-serif;background:#f4f4f4;-webkit-font-smoothing:antialiased}
+    input,textarea,select,button{font-family:inherit}
+    ::-webkit-scrollbar{width:4px;height:4px}
+    ::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:4px}
+    #splash{position:fixed;inset:0;background:#EFEDE8;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;font-family:'DM Sans',sans-serif}
+    #splash p{color:#C2622D;font-weight:700;font-size:15px;margin-top:12px}
+    #splash small{color:#9CA3AF;font-size:12px;margin-top:4px}
+    .dot{width:8px;height:8px;border-radius:50%;background:#C2622D;animation:blink 1.2s infinite}
+    .dot:nth-child(2){animation-delay:.2s}.dot:nth-child(3){animation-delay:.4s}
+    .dots{display:flex;gap:6px}
+    @keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+  </style>
 </head>
 <body>
+  <!-- Splash mientras carga Firebase -->
+  <div id="splash">
+    <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    <p>Grupo Consolidado</p>
+    <small id="splash-msg">Conectando con Firebase…</small>
+  </div>
   <div id="root"></div>
+
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
   <script>
-    firebase.initializeApp({apiKey:"AIzaSyA0H_yllcuPvXmeV2NJSlsOsA9nb62HIPU",authDomain:"grupo-consolidado-crm.firebaseapp.com",projectId:"grupo-consolidado-crm",storageBucket:"grupo-consolidado-crm.firebasestorage.app",messagingSenderId:"402285987115",appId:"1:402285987115:web:3685ad668ca5521e85f16e"});
-    window.db=firebase.firestore();
-    window.fbGuardar=async(col,id,datos)=>{try{await window.db.collection(col).doc(String(id)).set(datos,{merge:true});return true;}catch(e){return false;}};
-    window.fbObtener=async(col)=>{try{const snap=await window.db.collection(col).get();return snap.docs.map(d=>({id:d.id,...d.data()}));}catch(e){return[];}};
+    firebase.initializeApp({
+      apiKey:"AIzaSyA0H_yllcuPvXmeV2NJSlsOsA9nb62HIPU",
+      authDomain:"grupo-consolidado-crm.firebaseapp.com",
+      projectId:"grupo-consolidado-crm",
+      storageBucket:"grupo-consolidado-crm.firebasestorage.app",
+      messagingSenderId:"402285987115",
+      appId:"1:402285987115:web:3685ad668ca5521e85f16e"
+    });
+    window.db = firebase.firestore();
+
+    window.fbGuardar = async(col,id,datos)=>{
+      try{await window.db.collection(col).doc(String(id)).set(datos,{merge:true});return true;}
+      catch(e){console.warn('FB write:',col,e.message);return false;}
+    };
+    window.fbObtener = async(col)=>{
+      try{const snap=await window.db.collection(col).get();return snap.docs.map(d=>({id:d.id,...d.data()}));}
+      catch(e){console.warn('FB read:',col,e.message);return[];}
+    };
+
+    // Cargar clientes ANTES de arrancar React — se guarda en variable global
+    window.CLIENTES_FB = [];
+    window.CLIENTES_CARGADOS = false;
+
+    document.getElementById('splash-msg').textContent = 'Cargando clientes (' + new Date().toLocaleTimeString() + ')…';
+
+    window.db.collection('clientes').get()
+      .then(function(snap){
+        window.CLIENTES_FB = snap.docs.map(function(d){return Object.assign({id:d.id}, d.data());});
+        window.CLIENTES_CARGADOS = true;
+        document.getElementById('splash-msg').textContent = window.CLIENTES_FB.length + ' clientes listos';
+        console.log('Pre-carga Firebase: ' + window.CLIENTES_FB.length + ' clientes');
+        // Ocultar splash y mostrar app
+        setTimeout(function(){
+          var s = document.getElementById('splash');
+          if(s) s.style.display='none';
+        }, 500);
+      })
+      .catch(function(e){
+        console.error('Error pre-carga clientes:', e.message);
+        window.CLIENTES_CARGADOS = true; // seguir aunque haya error
+        document.getElementById('splash').style.display='none';
+      });
+
     console.log('Firebase OK');
   </script>
   <script src="https://unpkg.com/react@18.2.0/umd/react.development.js"></script>
@@ -23,6 +82,8 @@
   <script src="https://unpkg.com/@babel/standalone@7.23.2/babel.min.js"></script>
   <script type="text/babel" data-presets="react">
 const {useState,useMemo,useRef,useCallback,useEffect}=React;
+
+// Usar clientes pre-cargados de Firebase si están disponibles
 // ══════════════════════════════════════════════════════════════════
 // DESIGN SYSTEM
 // ══════════════════════════════════════════════════════════════════
@@ -7105,7 +7166,7 @@ function App(){
   const [modo,setModo]=useState(null); // null=selector | "crm" | "catalogo"
   const [section,setSection]=useState("dashboard");
   const [nominasSubidas,setNominasSubidas]=useState({});
-  const [clientesDB,setClientesDB]=useState(CLIENTES);
+  const [clientesDB,setClientesDB]=useState(window.CLIENTES_FB&&window.CLIENTES_FB.length>0?window.CLIENTES_FB:CLIENTES);
   const [clientesCargando,setClientesCargando]=useState(false);
   const [objetivosDB,setObjetivosDB]=useState({});
   const [historialDB,setHistorialDB]=useState([]);
@@ -7460,7 +7521,16 @@ function App(){
 }
 
 const root=ReactDOM.createRoot(document.getElementById('root'));
-root.render(React.createElement(App));
+
+// Esperar a que los clientes estén cargados antes de renderizar
+function waitAndRender(){
+  if(window.CLIENTES_CARGADOS){
+    root.render(React.createElement(App));
+  } else {
+    setTimeout(waitAndRender, 200);
+  }
+}
+waitAndRender();
   </script>
 </body>
 </html>
