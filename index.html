@@ -3493,8 +3493,8 @@ function Detalle({opo,onClose,onUpdate,onEdit}){
             <div><p style={{margin:"0 0 2px",fontSize:17,fontWeight:800,color:"#fff"}}>{opo.nombre}</p>
             <p style={{margin:0,fontSize:11,color:"#94A3B8"}}>Creada por {opo.creadaPorNombre} · {opo.creadaEn}</p></div>
             <div style={{display:"flex",gap:6,marginLeft:8,flexShrink:0}}>
-              {!["ganada","perdida"].includes(opo.estado)&&onEdit&&(
-                <button onClick={onEdit} style={{background:"#FFFFFF22",border:"none",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",padding:"6px 12px",borderRadius:7,display:"flex",alignItems:"center",gap:5}}>
+              {onEdit&&(
+                <button onClick={onEdit} style={{background:"#FFFFFF22",border:"1px solid #FFFFFF44",color:"#fff",fontSize:13,fontWeight:700,cursor:"pointer",padding:"7px 14px",borderRadius:8,display:"flex",alignItems:"center",gap:6}}>
                   ✏️ Editar
                 </button>
               )}
@@ -8470,7 +8470,7 @@ function App(){
       onOpenFicha={setFichaClienteId}
       usuario={usuario}
       onClienteCreado={c=>setClientesDB(p=>[c,...p])}/>;    if(section==="estadisticas")  return <Estadisticas usuario={usuario}/>;
-    if(section==="oportunidades") return <GestorOportunidades usuario={usuario}/>;
+    if(section==="oportunidades") return <GestorOportunidades usuario={session}/>;
     if(section==="incidencias")   return <Incidencias usuario={usuario} incidencias={incidencias} onAdd={addInc} onUpdate={updInc} respConfig={respConfig}/>;
     if(section==="recuperacion")  return <Recuperacion usuario={usuario} recuperaciones={recuperaciones} onAdd={addRec} onUpdate={updRec}/>;
     if(section==="muestras-historial") return <HistorialProductosMuestra
